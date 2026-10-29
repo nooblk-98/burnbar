@@ -22,13 +22,15 @@ const (
 	msgUsage    = WM_APP + 1 // background fetch finished
 	msgTray     = WM_APP + 2 // notification-area icon callback
 	msgMenu     = WM_APP + 3 // overlay or popup asks for the context menu
-	msgActivity = WM_APP + 4 // Claude Code wrote to its session logs
+	msgActivity = WM_APP + 4 // a provider wrote to its session logs
 
 	timerLayout   = 1 // 1s: z-order, fullscreen check, cached placement
 	timerRefresh  = 2 // regular usage refresh
 	timerRelayout = 3 // shortly after windows open or close
 	timerReset    = 4 // just after the next limit resets
 	timerActive   = 5 // deferred refresh while Claude Code is busy
+	timerRotate   = 6 // switch the compact meter to the next provider
+	timerFlip     = 7 // animate only while a flip is in progress
 
 	cmdDetails   = 1
 	cmdRefresh   = 2
@@ -39,6 +41,7 @@ const (
 	cmdExit      = 9
 	cmdPosition  = 100 // + index into positions
 	cmdInterval  = 200 // + minutes
+	cmdProvider  = 300 // + index into providerModes
 	slotTTL      = 5 * time.Second
 	activeMinGap = 60 * time.Second
 
@@ -48,8 +51,9 @@ const (
 )
 
 var (
-	positions = []struct{ key, label string }{{"auto", "Auto (find free space)"}, {"left", "Left side"}, {"right", "Next to tray icons"}}
-	intervals = []int{1, 3, 5, 10}
+	positions     = []struct{ key, label string }{{"auto", "Auto (find free space)"}, {"left", "Left side"}, {"right", "Next to tray icons"}}
+	intervals     = []int{1, 3, 5, 10}
+	providerModes = []struct{ key, label string }{{"both", "Claude + Codex (rotate every 8 sec)"}, {"claude", "Claude only"}, {"codex", "Codex only"}}
 )
 
 type placement struct {
@@ -66,33 +70,39 @@ type overlay struct {
 	last  placement
 	hover bool
 
-	slotX  int
-	slotW  int
-	slotAt time.Time
+	slotX            int
+	slotW            int
+	slotOK           bool
+	slotAt           time.Time
+	flipAt           time.Time
+	flipFrom, flipTo *image.RGBA
+	flipScale        float64
+	flipLight        bool
 }
 
 type app struct {
 	demo bool
 	cfg  config.Config
-	hist *history.History
+	hist map[usage.Provider]*history.History
 
 	hinst uintptr
 	main  uintptr
 	popup uintptr
 
 	mu       sync.Mutex
-	usage    usage.Usage
-	fetching atomic.Bool
+	readings map[usage.Provider]usage.Usage
+	fetches  map[usage.Provider]*fetchState
 
 	// main-thread state
 	lastFetch     time.Time
-	cooldownUntil time.Time
-	backoff       time.Duration
 	activePending bool
 
 	overlays       map[uintptr]*overlay // by taskbar window
 	slotsDirty     bool
 	relayoutPasses int
+	activeProvider int
+	flipStarted    time.Time
+	flipPrevious   int
 
 	popupVisible  bool
 	popupActive   bool // became the foreground window at least once since shown
@@ -106,6 +116,35 @@ type app struct {
 	taskbarCreated uint32
 
 	uia *uiaClient
+}
+
+type fetchState struct {
+	fetching      atomic.Bool
+	cooldownUntil time.Time
+	backoff       time.Duration
+}
+
+func providerID(p usage.Provider) uintptr {
+	if p == usage.Codex {
+		return 1
+	}
+	return 0
+}
+
+func providerFromID(id uintptr) usage.Provider {
+	if id == 1 {
+		return usage.Codex
+	}
+	return usage.Claude
+}
+
+func (a *app) enabled(p usage.Provider) bool {
+	for _, enabled := range usage.Providers(a.cfg.Providers) {
+		if p == enabled {
+			return true
+		}
+	}
+	return false
 }
 
 var theApp *app
@@ -154,15 +193,17 @@ func (a *app) run() error {
 	// Windows appearing or disappearing usually means taskbar buttons moved.
 	pSetWinEventHook.Call(EVENT_OBJECT_DESTROY, EVENT_OBJECT_HIDE, 0, winEventCB, 0, 0, WINEVENT_OUTOFCTX|WINEVENT_SKIPOWNPROCESS)
 	if !a.demo {
-		watchActivity(func() { pPostMessageW.Call(a.main, msgActivity, 0, 0) })
+		for _, p := range usage.Providers("both") {
+			watchActivity(p, func() { pPostMessageW.Call(a.main, msgActivity, providerID(p), 0) })
+		}
 	}
 
-	a.usage = usage.Usage{Err: "loading…"}
 	a.place(true)
 	a.updateTray()
 	a.refresh(true)
 	pSetTimer.Call(a.main, timerLayout, 1000, 0)
 	a.setRefreshTimer()
+	a.resetRotation()
 
 	var m MSG
 	for {
@@ -177,10 +218,14 @@ func (a *app) run() error {
 	return nil
 }
 
-func (a *app) snapshot() usage.Usage {
+func (a *app) snapshot() []usage.Usage {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return a.usage
+	var out []usage.Usage
+	for _, p := range usage.Providers(a.cfg.Providers) {
+		out = append(out, a.readings[p])
+	}
+	return out
 }
 
 func (a *app) interval() time.Duration { return time.Duration(a.cfg.IntervalMinutes) * time.Minute }
@@ -197,49 +242,66 @@ func (a *app) oneShot(id uintptr, d time.Duration) {
 
 // refresh starts a background fetch. Automatic refreshes respect the rate-limit back-off.
 func (a *app) refresh(manual bool) {
-	if !manual && time.Now().Before(a.cooldownUntil) {
+	for _, p := range usage.Providers(a.cfg.Providers) {
+		a.refreshProvider(p, manual)
+	}
+}
+
+func (a *app) refreshProvider(p usage.Provider, manual bool) {
+	state := a.fetches[p]
+	if !manual && time.Now().Before(state.cooldownUntil) {
 		return
 	}
 	if a.demo {
 		a.mu.Lock()
-		a.usage = usage.Demo()
+		a.readings[p] = usage.DemoProvider(p)
 		a.mu.Unlock()
-		pPostMessageW.Call(a.main, msgUsage, 0, 0)
+		pPostMessageW.Call(a.main, msgUsage, providerID(p), 0)
 		return
 	}
-	if !a.fetching.CompareAndSwap(false, true) {
+	if !state.fetching.CompareAndSwap(false, true) {
 		return
 	}
 	a.lastFetch = time.Now()
 	go func() {
-		defer a.fetching.Store(false)
-		u := usage.Fetch()
+		u := usage.FetchProvider(p)
 		a.mu.Lock()
 		if u.Err != "" {
 			// Keep showing the last good numbers; the tooltip and popup report the error.
-			prev := a.usage
+			prev := a.readings[p]
 			u.FiveHour, u.SevenDay, u.Extra, u.Breakdown = prev.FiveHour, prev.SevenDay, prev.Extra, prev.Breakdown
+			if len(prev.All()) > 0 {
+				u.UpdatedAt = prev.UpdatedAt
+			}
 		}
-		a.usage = u
+		a.readings[p] = u
 		a.mu.Unlock()
-		pPostMessageW.Call(a.main, msgUsage, 0, 0)
+		state.fetching.Store(false)
+		pPostMessageW.Call(a.main, msgUsage, providerID(p), 0)
 	}()
 }
 
-func (a *app) onUsage() {
-	u := a.snapshot()
+func (a *app) onUsage(p usage.Provider) {
+	if !a.enabled(p) {
+		return
+	}
+	a.mu.Lock()
+	u := a.readings[p]
+	a.mu.Unlock()
+	state := a.fetches[p]
 	switch {
 	case u.RateLimited:
-		a.backoff = min(max(2*a.backoff, 2*time.Minute), 16*time.Minute)
-		a.cooldownUntil = time.Now().Add(a.backoff)
+		state.backoff = min(max(2*state.backoff, 2*time.Minute), 16*time.Minute)
+		state.cooldownUntil = time.Now().Add(state.backoff)
 	case u.Err == "":
-		a.backoff = 0
+		state.backoff = 0
+		state.cooldownUntil = time.Time{}
 		if !a.demo {
-			a.hist.Add(u)
+			a.hist[p].Add(u)
 		}
 		a.checkAlerts(u)
-		a.scheduleResetRefresh(u)
 	}
+	a.scheduleResetRefresh()
 	a.place(true)
 	a.updateTray()
 	if a.popupVisible {
@@ -248,7 +310,10 @@ func (a *app) onUsage() {
 }
 
 // onActivity refreshes soon after Claude Code is used, but no more than once a minute.
-func (a *app) onActivity() {
+func (a *app) onActivity(p usage.Provider) {
+	if !a.enabled(p) {
+		return
+	}
 	if a.activePending {
 		return
 	}
@@ -261,11 +326,17 @@ func (a *app) onActivity() {
 }
 
 // scheduleResetRefresh fetches again right after the next limit resets, so the bar drops at once.
-func (a *app) scheduleResetRefresh(u usage.Usage) {
+func (a *app) scheduleResetRefresh() {
+	pKillTimer.Call(a.main, timerReset)
 	var next time.Time
-	for _, w := range u.All() {
-		if w.ResetsAt.After(time.Now()) && (next.IsZero() || w.ResetsAt.Before(next)) {
-			next = w.ResetsAt
+	for _, u := range a.snapshot() {
+		if u.Err != "" {
+			continue
+		}
+		for _, w := range u.All() {
+			if w.ResetsAt.After(time.Now()) && (next.IsZero() || w.ResetsAt.Before(next)) {
+				next = w.ResetsAt
+			}
 		}
 	}
 	if d := time.Until(next) + 15*time.Second; !next.IsZero() && d < a.interval() {
@@ -279,13 +350,17 @@ func (a *app) checkAlerts(u usage.Usage) {
 	changed := false
 	for _, w := range u.All() {
 		cycle := w.ResetsAt.Truncate(time.Minute).Unix()
-		prev, seen := a.cfg.AlertState[w.Key]
+		key := w.Key // retain existing Claude alert state
+		if u.Provider == usage.Codex {
+			key = "codex/" + key
+		}
+		prev, seen := a.cfg.AlertState[key]
 		cur := config.AlertState{ResetsAt: cycle, Percent: w.Percent}
 		if seen && prev.ResetsAt == cycle {
 			cur.Level = prev.Level
 		}
 		if seen && prev.ResetsAt != cycle && prev.Level > 0 && w.Percent < prev.Percent && a.cfg.Alerts {
-			a.notify(w.Label+" limit has reset", fmt.Sprintf("You're back to %.0f%% used.", w.Percent), false)
+			a.notify(u.Name()+" "+w.Label+" limit has reset", fmt.Sprintf("You're back to %.0f%% used.", w.Percent), false)
 		}
 		level := 0
 		if w.Percent >= 95 {
@@ -295,12 +370,12 @@ func (a *app) checkAlerts(u usage.Usage) {
 		}
 		if level > cur.Level {
 			if a.cfg.Alerts {
-				a.notify(fmt.Sprintf("Claude %s at %.0f%%", w.Label, w.Percent), render.ResetText(w.ResetsAt), true)
+				a.notify(fmt.Sprintf("%s %s at %.0f%%", u.Name(), w.Label, w.Percent), render.ResetText(w.ResetsAt), true)
 			}
 			cur.Level = level
 		}
 		if cur != prev {
-			a.cfg.AlertState[w.Key] = cur
+			a.cfg.AlertState[key] = cur
 			changed = true
 		}
 	}
@@ -356,9 +431,9 @@ func (a *app) overlayByHwnd(hwnd uintptr) *overlay {
 
 // slot returns the overlay's x position, re-reading the taskbar layout every few seconds
 // or right after windows open and close.
-func (a *app) slot(ov *overlay, tb taskbar, w int, scale float64) int {
+func (a *app) slot(ov *overlay, tb taskbar, w int, scale float64) (int, bool) {
 	if !a.slotsDirty && w == ov.slotW && time.Since(ov.slotAt) < slotTTL {
-		return ov.slotX
+		return ov.slotX, ov.slotOK
 	}
 	margin := int(6 * scale)
 	items, ok := a.uia.items(tb.hwnd)
@@ -369,12 +444,12 @@ func (a *app) slot(ov *overlay, tb taskbar, w int, scale float64) int {
 			trayLeft = int(tb.rect.Right) - int(140*scale) // clock only
 		}
 	}
-	x := trayLeft - margin - w
+	x, fits := 0, false
 	if ok {
-		x = layout.PickSlot(occupied, int(tb.rect.Left), trayLeft, w, margin, a.cfg.Position)
+		x, fits = layout.PickSlot(occupied, int(tb.rect.Left), trayLeft, w, margin, a.cfg.Position)
 	}
-	ov.slotX, ov.slotW, ov.slotAt = x, w, time.Now()
-	return x
+	ov.slotX, ov.slotW, ov.slotAt, ov.slotOK = x, w, time.Now(), fits
+	return x, fits
 }
 
 func (a *app) place(force bool) {
@@ -391,10 +466,10 @@ func (a *app) place(force bool) {
 		p := placement{}
 		if v, _, _ := pIsWindowVisible.Call(tb.hwnd); v != 0 && !hideAll {
 			scale := float64(dpiForWindow(tb.hwnd)) / 96
-			w, h := render.WidgetSize(scale)
-			x := a.slot(ov, tb, w, scale)
+			w, h := render.GroupWidgetSize(scale, len(usage.Providers(a.cfg.Providers)))
+			x, fits := a.slot(ov, tb, w, scale)
 			y := int(tb.rect.Top) + (int(tb.rect.Bottom-tb.rect.Top)-h)/2
-			p = placement{x: x, y: y, w: w, h: h, scale: scale, light: light, visible: true}
+			p = placement{x: x, y: y, w: w, h: h, scale: scale, light: light, visible: fits}
 		}
 		a.apply(ov, p, force)
 	}
@@ -416,7 +491,7 @@ func (a *app) apply(ov *overlay, p placement, force bool) {
 		return
 	}
 	if force || p != ov.last {
-		a.paint(ov.hwnd, render.Widget(p.scale, a.snapshot(), render.NewTheme(p.light), ov.hover), p.x, p.y)
+		a.paint(ov.hwnd, a.widget(ov, p), p.x, p.y)
 	}
 	if !ov.last.visible {
 		pShowWindow.Call(ov.hwnd, SW_SHOWNOACTIVATE)
@@ -483,13 +558,14 @@ func (a *app) hidePopup() {
 
 func (a *app) renderPopup() {
 	scale := float64(dpiForWindow(a.popupTB)) / 96
-	var samples []history.Sample
-	if a.hist != nil {
-		samples = a.hist.Since(time.Now().Add(-7 * 24 * time.Hour))
+	var panels []render.Panel
+	for _, u := range a.snapshot() {
+		panels = append(panels, render.Panel{Usage: u, History: a.hist[u.Provider].Since(time.Now().Add(-7 * 24 * time.Hour))})
 	}
-	img := render.Popup(scale, a.snapshot(), samples, render.NewTheme(systemUsesLightTheme()))
-	w, h := img.Rect.Dx(), img.Rect.Dy()
 	work := workArea(a.popupTB)
+	// Two columns on roomy screens; a compact stacked summary on small displays.
+	img := render.GroupPopup(scale, panels, render.NewTheme(systemUsesLightTheme()), int(work.Right-work.Left)-24, int(work.Bottom-work.Top)-24)
+	w, h := img.Rect.Dx(), img.Rect.Dy()
 	gapPx := int(12 * scale)
 	x := min(max(a.popupCenterX-w/2, int(work.Left)+gapPx), int(work.Right)-gapPx-w)
 	y := int(work.Bottom) - gapPx - h
@@ -528,11 +604,11 @@ func (a *app) updateTray() {
 		}
 	}
 	u := a.snapshot()
-	icon := makeIcon(render.TrayIcon(size, u, systemUsesLightTheme()))
+	icon := makeIcon(render.GroupTrayIcon(size, u, systemUsesLightTheme()))
 
 	nid := NOTIFYICONDATAW{HWnd: a.main, UID: 1, UFlags: NIF_MESSAGE | NIF_ICON | NIF_TIP, UCallbackMessage: msgTray, HIcon: icon}
 	nid.CbSize = uint32(unsafe.Sizeof(nid))
-	copyUTF16(nid.SzTip[:], render.Tooltip(u))
+	copyUTF16(nid.SzTip[:], render.GroupTooltip(u))
 	op := uintptr(NIM_MODIFY)
 	if !a.trayAdded {
 		op = NIM_ADD
@@ -609,11 +685,6 @@ func (a *app) showMenu() {
 		}
 		return 0
 	}
-	u := a.snapshot()
-	status := "Updated " + u.UpdatedAt.Format("3:04 PM")
-	if u.Err != "" {
-		status = u.Err
-	}
 	posMenu, _, _ := pCreatePopupMenu.Call()
 	for i, p := range positions {
 		add(posMenu, MF_STRING|check(a.cfg.Position == p.key), uintptr(cmdPosition+i), p.label)
@@ -623,10 +694,21 @@ func (a *app) showMenu() {
 		add(intMenu, MF_STRING|check(a.cfg.IntervalMinutes == m), uintptr(cmdInterval+m), fmt.Sprintf("Every %d min", m))
 	}
 
-	add(menu, MF_STRING|MF_GRAYED, 0, status)
+	for _, u := range a.snapshot() {
+		status := u.Name() + ": updated " + u.UpdatedAt.Format("3:04 PM")
+		if u.Err != "" {
+			status = u.Name() + ": " + u.Err
+		}
+		add(menu, MF_STRING|MF_GRAYED, 0, status)
+	}
 	add(menu, MF_SEPARATOR, 0, "")
 	add(menu, MF_STRING, cmdDetails, "Show details")
 	add(menu, MF_STRING, cmdRefresh, "Refresh now")
+	providerMenu, _, _ := pCreatePopupMenu.Call()
+	for i, mode := range providerModes {
+		add(providerMenu, MF_STRING|check(a.cfg.Providers == mode.key), uintptr(cmdProvider+i), mode.label)
+	}
+	add(menu, MF_POPUP, providerMenu, "Usage providers")
 	add(menu, MF_SEPARATOR, 0, "")
 	add(menu, MF_STRING|check(a.cfg.ShowOverlay), cmdOverlay, "Show on taskbar")
 	add(menu, MF_STRING|check(a.cfg.AllMonitors), cmdMonitors, "Show on all monitors")
@@ -658,6 +740,11 @@ func (a *app) showMenu() {
 		a.cfg.Alerts = !a.cfg.Alerts
 	case cmd == cmdStartup:
 		setStartup(!startupEnabled())
+	case cmd >= cmdProvider && cmd < cmdProvider+uintptr(len(providerModes)):
+		a.cfg.Providers = providerModes[cmd-cmdProvider].key
+		a.resetRotation()
+		a.refresh(false)
+		a.scheduleResetRefresh()
 	case cmd >= cmdPosition && cmd < cmdPosition+uintptr(len(positions)):
 		a.cfg.Position = positions[cmd-cmdPosition].key
 	case cmd > cmdInterval && cmd <= cmdInterval+60:
@@ -672,6 +759,10 @@ func (a *app) showMenu() {
 	a.cfg.Save()
 	a.slotsDirty = true
 	a.place(true)
+	a.updateTray()
+	if a.popupVisible {
+		a.renderPopup()
+	}
 }
 
 // Window procedures
@@ -688,6 +779,10 @@ func mainProc(hwnd, msg, wparam, lparam uintptr) uintptr {
 			}
 		case timerRefresh:
 			a.refresh(false)
+		case timerRotate:
+			a.rotateProvider()
+		case timerFlip:
+			a.animateFlip()
 		case timerRelayout:
 			// Run twice: once right away, once after the taskbar's button animation settles.
 			a.slotsDirty = true
@@ -707,10 +802,10 @@ func mainProc(hwnd, msg, wparam, lparam uintptr) uintptr {
 		}
 		return 0
 	case msg == msgUsage:
-		a.onUsage()
+		a.onUsage(providerFromID(wparam))
 		return 0
 	case msg == msgActivity:
-		a.onActivity()
+		a.onActivity(providerFromID(wparam))
 		return 0
 	case msg == msgTray:
 		switch lparam & 0xFFFF {

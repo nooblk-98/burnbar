@@ -148,9 +148,9 @@ func baseColor(w *usage.Window) color.NRGBA {
 	switch {
 	case w == nil:
 		return colorOff
-	case w.Key == "session":
+	case w.Key == "session" || w.Key == "primary":
 		return color5h
-	case w.Key == "weekly_all":
+	case w.Key == "weekly_all" || w.Key == "secondary":
 		return color7d
 	}
 	return colorOther
@@ -250,7 +250,7 @@ func Widget(scale float64, u usage.Usage, th Theme, hover bool) *image.RGBA {
 	rows := []struct {
 		label string
 		win   *usage.Window
-	}{{"5h", u.FiveHour}, {"7d", u.SevenDay}}
+	}{{usage.WindowShortLabel(u.FiveHour, "1st"), u.FiveHour}, {usage.WindowShortLabel(u.SevenDay, "2nd"), u.SevenDay}}
 	for i, row := range rows {
 		cy := float64(h)/2 + (float64(i)-0.5)*rowPitch*scale
 		baseline := cy + capH/2
@@ -350,8 +350,8 @@ func Popup(scale float64, u usage.Usage, hist []history.Sample, th Theme) *image
 	left, right := s(popupPad), float64(W)-s(popupPad)
 
 	y := s(popupPad) + capHeight(title)
-	drawText(content, title, "Claude usage", left, y, th.text)
-	if !u.UpdatedAt.IsZero() {
+	drawText(content, title, u.Name()+" usage", left, y, th.text)
+	if !u.UpdatedAt.IsZero() && len(u.All()) > 0 {
 		drawTextRight(content, small, "Updated "+u.UpdatedAt.Format("3:04 PM"), right, y, th.sub)
 	}
 	y += s(10)
@@ -374,8 +374,14 @@ func Popup(scale float64, u usage.Usage, hist []history.Sample, th Theme) *image
 	}
 
 	if u.Err != "" {
-		y += s(14) + capHeight(small)
-		drawText(content, small, u.Err, left, y, colorHot)
+		for _, line := range wrapText(small, u.Err, right-left) {
+			y += s(7) + capHeight(small)
+			drawText(content, small, line, left, y, colorHot)
+		}
+		if len(u.All()) > 0 {
+			y += s(7) + capHeight(small)
+			drawText(content, small, "Showing last successful reading", left, y, th.sub)
+		}
 	}
 
 	now := time.Now()
@@ -386,13 +392,13 @@ func Popup(scale float64, u usage.Usage, hist []history.Sample, th Theme) *image
 		get    func(history.Sample) float64
 		c      color.NRGBA
 	}{
-		{"Session – last 24 hours", now.Add(-24 * time.Hour), 20 * time.Minute, func(x history.Sample) float64 { return x.S }, color5h},
-		{"Weekly – last 7 days", now.Add(-7 * 24 * time.Hour), 2 * time.Hour, func(x history.Sample) float64 { return x.W }, color7d},
+		{"Primary – last 24 hours", now.Add(-24 * time.Hour), 20 * time.Minute, func(x history.Sample) float64 { return x.S }, color5h},
+		{"Secondary – last 7 days", now.Add(-7 * 24 * time.Hour), 2 * time.Hour, func(x history.Sample) float64 { return x.W }, color7d},
 	}
 	for _, ch := range charts {
 		var pts []history.Sample
 		for _, x := range hist {
-			if x.T >= ch.from.Unix() {
+			if x.T >= ch.from.Unix() && ch.get(x) >= 0 {
 				pts = append(pts, x)
 			}
 		}
@@ -466,7 +472,7 @@ func Tooltip(u usage.Usage) string {
 		}
 		return s
 	}
-	lines := []string{"Claude usage", line("5h", u.FiveHour), line("7d", u.SevenDay)}
+	lines := []string{u.Name() + " usage", line(usage.WindowShortLabel(u.FiveHour, "Primary"), u.FiveHour), line(usage.WindowShortLabel(u.SevenDay, "Secondary"), u.SevenDay)}
 	if u.Err != "" {
 		lines = append(lines, u.Err)
 	} else if !u.UpdatedAt.IsZero() {

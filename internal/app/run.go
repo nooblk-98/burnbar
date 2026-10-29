@@ -7,12 +7,13 @@ import (
 
 	"github.com/nooblk-98/burnbar/internal/config"
 	"github.com/nooblk-98/burnbar/internal/history"
+	"github.com/nooblk-98/burnbar/internal/usage"
 
 	"golang.org/x/sys/windows"
 )
 
 // Run shows the meter and blocks until the user exits. A second instance exits immediately.
-func Run(demo bool) error {
+func Run(demo bool, mode string) error {
 	// Win32 windows belong to the thread that created them; keep the message loop on one OS thread.
 	runtime.LockOSThread()
 
@@ -23,10 +24,20 @@ func Run(demo bool) error {
 	defer windows.CloseHandle(mutex)
 
 	a := &app{demo: demo, cfg: config.Load()}
-	if demo {
-		a.hist = history.Demo()
-	} else {
-		a.hist = history.Load(config.Dir())
+	if mode != "" {
+		a.cfg.Providers = mode
+	}
+	a.hist = map[usage.Provider]*history.History{}
+	a.readings = map[usage.Provider]usage.Usage{}
+	a.fetches = map[usage.Provider]*fetchState{}
+	for _, p := range usage.Providers("both") {
+		if demo {
+			a.hist[p] = history.Demo()
+		} else {
+			a.hist[p] = history.LoadProvider(config.Dir(), p)
+		}
+		a.readings[p] = usage.Usage{Provider: p, Err: "Loading..."}
+		a.fetches[p] = &fetchState{}
 	}
 	theApp = a
 	return a.run()

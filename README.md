@@ -10,43 +10,59 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D4)](#installation)
 [![License](https://img.shields.io/github/license/nooblk-98/burnbar)](LICENSE)
 
-**Claude usage meter for the Windows taskbar.**<br>
-See how fast you're burning through your Claude plan limits without leaving what you're doing.
+**Claude and Codex usage meter for the Windows taskbar.**<br>
+See how fast you're burning through your plan limits without leaving what you're doing.
 
 [Features](#features) • [Installation](#installation) • [Usage](#usage) • [How it works](#how-it-works) • [Build from source](#build-from-source)
 
-<img src="docs/images/image.png" alt="BurnBar on the Windows taskbar">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/meter-rotation-dark.gif">
+  <img src="docs/images/meter-rotation-light.gif" alt="BurnBar flipping between Claude and Codex in one compact taskbar meter" width="325">
+</picture>
+<br>
+<sub>Sample readings. One compact meter, two providers, a downward flip every 8 seconds.</sub>
 
 </div>
 
-Claude plans have a rolling **5-hour session limit** and a **weekly limit**. Claude Code shows them
-when you run `/usage`, but it's easy to hit one mid-task. BurnBar keeps both on your taskbar as two
-small bars, warns you before you run out, and shows whether you're using them faster than the
-time window allows.
+Claude and Codex have session and longer-term plan limits. BurnBar keeps both providers on your
+taskbar, warns you before you run out, and shows whether you're using them faster than the time
+window allows. Use both together, or select one from **Usage providers** in the right-click menu.
+Codex window lengths come from your account rather than assuming every plan uses the same limits.
 
 > [!NOTE]
-> BurnBar is an unofficial community project, not affiliated with or endorsed by Anthropic.
-> "Claude" is a trademark of Anthropic, PBC.
+> BurnBar is an unofficial community project, not affiliated with or endorsed by Anthropic or OpenAI.
+> "Claude" and "Codex" belong to their respective owners.
 
 ## Features
 
-- **Two bars, always visible**: session (5h, orange) and weekly (7d, green) usage, turning red at 90%.
+- **Claude + Codex**: one compact meter rotates between providers every 8 seconds with a downward
+  flip animation. The provider name stays visible above its two quota bars. Rotation pauses on
+  hover and while details are open, and respects Windows' animation setting.
+  Select Claude only or Codex only to keep one provider visible. Bars turn red at 90%.
 - **Pace marker**: a tick on each bar shows how much of the window's time has passed. A bar past its
   tick means you'll hit the limit before it resets.
 - **Stays out of the way**: finds free space on the taskbar so it never covers app icons, follows the
   light/dark theme and display scaling, and hides during fullscreen apps and games.
-- **Details panel**: every limit your plan reports (including per-model weekly limits), reset times,
-  24-hour and 7-day history charts, and this week's usage by product.
+  If the taskbar is full, the meter hides until space opens; the tray icon and details stay available.
+- **Details panel**: separate provider panels, reported quota windows, reset times, and independent
+  24-hour and 7-day history charts. Claude also shows this week's usage by product when available.
 - **Alerts**: Windows notifications at 80% and 95%, and when a limit you'd been close to resets.
-- **Fresh numbers**: refreshes on a schedule, within a minute of Claude Code activity, and right after
+- **Fresh numbers**: refreshes on a schedule, within a minute of Claude Code or Codex activity, and right after
   a limit resets, backing off automatically if the API rate-limits.
 - **Multi-monitor**: a meter on every taskbar, plus a tray icon with tooltip and menu.
-- **Lightweight**: a single ~7 MB executable with no runtime or installer.
+- **Lightweight**: a single executable with no installer. Codex usage uses your existing Codex CLI.
 
 ## Installation
 
-You need Windows 10 or 11 and [Claude Code](https://claude.com/claude-code) signed in with a Claude
-subscription. BurnBar uses that login, so there's nothing else to configure.
+You need Windows 10 or 11 and a signed-in provider:
+
+- **Claude:** [Claude Code](https://claude.com/claude-code) signed in with a Claude subscription.
+- **Codex:** [Codex CLI](https://developers.openai.com/codex/cli/) signed in with **ChatGPT**
+  (`codex login`). API-key-only accounts do not provide these subscription usage limits.
+  BurnBar also detects the CLI bundled with the Windows Codex desktop app when available.
+
+Both providers rotate through the meter by default. A missing login affects only that provider. Select
+**Usage providers** from the right-click menu to hide a provider you don't use.
 
 **winget**
 
@@ -66,6 +82,10 @@ put it anywhere (for example `%LOCALAPPDATA%\Programs\BurnBar`), and run it.
 ## Usage
 
 Run `burnbar.exe`. The meter appears on the taskbar, and an icon appears in the notification area.
+With both providers enabled, the meter switches between **Claude** and **Codex** every 8 seconds.
+The provider name above the bars identifies the reading; hover to pause rotation.
+The duration beside each bar is reported by the provider (commonly `5h` and `7d`). A dash means
+that quota wasn't reported; an exclamation mark means usage is unavailable. Click for details.
 
 | On the meter | Meaning |
 |---|---|
@@ -76,18 +96,23 @@ Run `burnbar.exe`. The meter appears on the taskbar, and an icon appears in the 
 
 | Action | Result |
 |---|---|
-| Hover the meter | Shows time until each limit resets |
+| Hover the meter | Pauses rotation and shows time until each limit resets |
 | Click the meter or tray icon | Opens the details panel (click it to refresh, <kbd>Esc</kbd> to close) |
 | Right-click the meter or tray icon | Opens the settings menu |
 
 <div align="center">
-<img src="docs/images/popup-dark.png" alt="Details panel" width="320">
-<img src="docs/images/popup-light.png" alt="Details panel, light theme" width="320">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/popup-dark.png">
+  <img src="docs/images/popup-light.png" alt="Claude and Codex details with separate quota bars, reset times and usage history" width="810">
+</picture>
+<br>
+<sub>Details for both providers, using sample data. <a href="docs/images/popup-dark.png">Dark theme</a> · <a href="docs/images/popup-light.png">Light theme</a></sub>
 </div>
 
 From the right-click menu you can:
 
 - **Refresh now** or change the **Refresh interval** (1, 3, 5 or 10 minutes)
+- Choose **Usage providers**: *Claude + Codex*, *Claude only*, or *Codex only*
 - Choose the **Position**: *Auto* (free space), *Left side* or *Next to tray icons*
 - Toggle **Show on taskbar**, **Show on all monitors** and **Usage alerts**
 - Turn on **Start with Windows**
@@ -97,22 +122,30 @@ From the right-click menu you can:
 
 ## How it works
 
-BurnBar reads the OAuth token that Claude Code saves in `%USERPROFILE%\.claude\.credentials.json`
+**Claude:** BurnBar reads the OAuth token that Claude Code saves in `%USERPROFILE%\.claude\.credentials.json`
 (or `%CLAUDE_CONFIG_DIR%`) and calls `https://api.anthropic.com/api/oauth/usage`, the same endpoint
 Claude Code's `/usage` command uses. To place itself, it reads the taskbar button positions through
 Windows UI Automation and picks the free gap closest to the notification area.
 
-**Privacy.** The token is only ever sent to `api.anthropic.com`. BurnBar never modifies or refreshes
-it, has no telemetry, and sends nothing anywhere else. Settings, alert state and a week of usage
-history stay on your PC in `%APPDATA%\BurnBar\`.
+**Codex:** BurnBar starts a short-lived local `codex app-server` process and uses the documented
+[`account/read` and `account/rateLimits/read`](https://developers.openai.com/codex/app-server/)
+requests. It uses Codex's existing login and honors `CODEX_HOME`. It does not start conversations
+or model turns. If automatic detection fails, set `BURNBAR_CODEX_PATH` to the full path to the
+native `codex.exe` before starting BurnBar. The CLI must support the account app-server methods.
+
+**Privacy.** Claude's token is sent only to `api.anthropic.com`; BurnBar never modifies or refreshes
+it. Codex authentication and network requests are handled by the installed Codex CLI using its
+configured OpenAI services. BurnBar does not read or copy Codex credentials. BurnBar has no telemetry.
+Settings, alert state and separate histories stay on your PC in `%APPDATA%\BurnBar\`;
+Claude's existing `history.jsonl` is preserved and Codex uses `history-codex.jsonl`.
 
 > [!IMPORTANT]
-> The usage endpoint is undocumented and may change or stop working at any time. If the meter shows
+> Claude's usage endpoint is undocumented and may change or stop working at any time. If the meter shows
 > a login error, run `claude` once so Claude Code refreshes its token.
 
 ## Build from source
 
-You need [Go 1.24+](https://go.dev/dl/) on Windows.
+You need [Go 1.26+](https://go.dev/dl/) on Windows.
 
 ```powershell
 git clone https://github.com/nooblk-98/burnbar.git
@@ -129,8 +162,10 @@ The executable also accepts a few flags for development:
 | Flag | Description |
 |---|---|
 | `-demo` | Show sample numbers and history without calling the API |
-| `-snapshot <dir>` | Render the meter and details panel (light and dark) as PNGs, then exit. Combine with `-demo`. |
-| `-once` | Print the raw API response and a summary, then exit. Needs a console build: `go build -o bin\burnbar-cli.exe ./cmd/burnbar` |
+| `-providers both` | Show Claude and Codex; also accepts `claude` or `codex`. Defaults to the saved menu setting. |
+| `-taskbar-layout` | Print measured taskbar spans and the compact meter's available slot, then exit. Useful for diagnosing placement. |
+| `-snapshot <dir>` | Render PNG previews and the provider-rotation GIF in both themes, then exit. Combine with `-demo -providers both`. |
+| `-once` | Print usage summaries for the selected providers, then exit. Needs a console build: `go build -o bin\burnbar-cli.exe ./cmd/burnbar` |
 
 > [!WARNING]
 > Local builds aren't signed, so Windows **Smart App Control** may block them. Signed builds come
@@ -142,7 +177,7 @@ The executable also accepts a few flags for development:
 ```
 cmd/burnbar/          entry point, flags, embedded icon and manifest
 internal/app/         Windows UI: taskbar meters, tray icon, details panel, menu, Win32 and UI Automation
-internal/usage/       Claude Code login and usage API client
+internal/usage/       Claude usage client and Codex app-server account client
 internal/render/      drawing the meter, details panel, charts and tray icon
 internal/layout/      choosing a free spot on the taskbar
 internal/config/      settings and alert state
@@ -164,5 +199,5 @@ Free code signing provided by [SignPath.io](https://about.signpath.io), certific
 - Approvers: [Lahiru S Liyanage](https://github.com/nooblk-98)
 
 Every release is built by GitHub Actions from this repository's source and signed only after manual
-approval. The program connects only to `api.anthropic.com`, to read the signed-in user's own usage,
-as described under [How it works](#how-it-works).
+approval. The program reads the signed-in user's own Claude usage from `api.anthropic.com` and
+Codex usage through the installed local Codex CLI, as described under [How it works](#how-it-works).

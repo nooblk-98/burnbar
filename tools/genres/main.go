@@ -46,7 +46,7 @@ func main() {
 	}
 	rs.SetManifest(winres.AppManifest{
 		Identity:            winres.AssemblyIdentity{Name: "BurnBar", Version: v},
-		Description:         "Claude usage meter for the Windows taskbar",
+		Description:         "Claude and Codex usage meter for the Windows taskbar",
 		Compatibility:       winres.Win10AndAbove,
 		ExecutionLevel:      winres.AsInvoker,
 		DPIAwareness:        winres.DPIPerMonitorV2,

@@ -53,6 +53,7 @@ var (
 	pMonitorFromWindow             = user32.NewProc("MonitorFromWindow")
 	pGetMonitorInfoW               = user32.NewProc("GetMonitorInfoW")
 	pLoadImageW                    = user32.NewProc("LoadImageW")
+	pSystemParametersInfoW         = user32.NewProc("SystemParametersInfoW")
 
 	pCreateCompatibleDC = gdi32.NewProc("CreateCompatibleDC")
 	pCreateDIBSection   = gdi32.NewProc("CreateDIBSection")

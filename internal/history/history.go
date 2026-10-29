@@ -30,7 +30,16 @@ type History struct {
 
 // Load reads history.jsonl from dir, dropping readings older than eight days.
 func Load(dir string) *History {
-	h := &History{path: filepath.Join(dir, "history.jsonl")}
+	return LoadProvider(dir, usage.Claude)
+}
+
+// LoadProvider keeps Claude's existing history file and isolates Codex readings.
+func LoadProvider(dir string, provider usage.Provider) *History {
+	name := "history.jsonl"
+	if provider == usage.Codex {
+		name = "history-codex.jsonl"
+	}
+	h := &History{path: filepath.Join(dir, name)}
 	f, err := os.Open(h.path)
 	if err != nil {
 		return h

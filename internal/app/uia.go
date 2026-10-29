@@ -35,6 +35,7 @@ const (
 	vtAutoCreateTrueCond    = 21
 	vtElemFindAll           = 6
 	vtElemClassName         = 30
+	vtElemControlType       = 21
 	vtElemBoundingRectangle = 43
 	vtArrayLength           = 3
 	vtArrayGetElement       = 4
@@ -112,7 +113,9 @@ func (u *uiaClient) items(taskbar uintptr) ([]layout.Item, bool) {
 		if el.call(vtElemBoundingRectangle, uintptr(unsafe.Pointer(&r))) == 0 && r.Right > r.Left {
 			var b *uint16
 			el.call(vtElemClassName, uintptr(unsafe.Pointer(&b)))
-			items = append(items, layout.Item{Class: bstrToString(b), Rect: r})
+			var controlType int32
+			el.call(vtElemControlType, uintptr(unsafe.Pointer(&controlType)))
+			items = append(items, layout.Item{Class: bstrToString(b), Rect: r, ControlType: controlType})
 		}
 		el.release()
 	}

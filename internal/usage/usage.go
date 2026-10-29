@@ -1,4 +1,4 @@
-// Package usage reads Claude Code's login and fetches plan usage limits from the Anthropic API.
+// Package usage reads plan limits for Claude Code and Codex.
 package usage
 
 import (
@@ -37,6 +37,7 @@ type Share struct {
 }
 
 type Usage struct {
+	Provider    Provider
 	FiveHour    *Window
 	SevenDay    *Window
 	Extra       []*Window // any other limits the API reports (e.g. per-model weekly limits)
@@ -45,6 +46,8 @@ type Usage struct {
 	Err         string
 	RateLimited bool
 }
+
+func (u Usage) Name() string { return u.Provider.Name() }
 
 func (u Usage) All() []*Window {
 	var all []*Window
@@ -131,7 +134,7 @@ func FetchRaw() ([]byte, error) {
 func Fetch() Usage {
 	body, err := FetchRaw()
 	if err != nil {
-		return Usage{Err: err.Error(), RateLimited: errors.Is(err, errRateLimited), UpdatedAt: time.Now()}
+		return Usage{Provider: Claude, Err: err.Error(), RateLimited: errors.Is(err, errRateLimited), UpdatedAt: time.Now()}
 	}
 	return Parse(body)
 }
@@ -192,9 +195,9 @@ func Parse(body []byte) Usage {
 		} `json:"seven_day_breakdown"`
 	}
 	if err := json.Unmarshal(body, &r); err != nil {
-		return Usage{Err: "unexpected response from usage API", UpdatedAt: time.Now()}
+		return Usage{Provider: Claude, Err: "unexpected response from usage API", UpdatedAt: time.Now()}
 	}
-	u := Usage{UpdatedAt: time.Now()}
+	u := Usage{Provider: Claude, UpdatedAt: time.Now()}
 	for _, l := range r.Limits {
 		if l.Percent == nil {
 			continue
@@ -233,6 +236,7 @@ func Parse(body []byte) Usage {
 func Demo() Usage {
 	now := time.Now()
 	return Usage{
+		Provider: Claude,
 		FiveHour: &Window{Key: "session", Label: limitLabel("session"), Percent: 62,
 			ResetsAt: now.Add(1*time.Hour + 13*time.Minute), Length: 5 * time.Hour},
 		SevenDay: &Window{Key: "weekly_all", Label: limitLabel("weekly_all"), Percent: 17,

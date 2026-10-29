@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+
+	"github.com/nooblk-98/burnbar/internal/usage"
 )
 
 type Config struct {
+	Providers       string `json:"providers"` // "claude", "codex" or "both"
 	ShowOverlay     bool   `json:"showOverlay"`
 	AllMonitors     bool   `json:"allMonitors"`
 	Position        string `json:"position"` // "auto", "left" or "right" (next to the tray)
@@ -25,7 +28,7 @@ type AlertState struct {
 }
 
 func Default() Config {
-	return Config{ShowOverlay: true, AllMonitors: true, Position: "auto", IntervalMinutes: 3, Alerts: true}
+	return Config{Providers: "both", ShowOverlay: true, AllMonitors: true, Position: "auto", IntervalMinutes: 3, Alerts: true}
 }
 
 // Dir is the folder holding settings and history; it is created if missing.
@@ -57,6 +60,9 @@ func Load() Config {
 	}
 	if c.IntervalMinutes < 1 {
 		c.IntervalMinutes = 3
+	}
+	if !usage.ValidMode(c.Providers) {
+		c.Providers = "both"
 	}
 	if c.AlertState == nil {
 		c.AlertState = map[string]AlertState{}
