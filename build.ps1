@@ -1,6 +1,6 @@
-# Builds bin\claude-usage.exe: runs vet and tests, then compiles.
+# Builds bin\burnbar.exe: runs vet and tests, then compiles.
 # Usage: .\build.ps1 [-Version 0.2.0] [-Resources] [-SkipTests]
-#   -Resources  regenerate cmd\claude-usage\rsrc_windows_amd64.syso (icon, manifest, version info);
+#   -Resources  regenerate cmd\burnbar\rsrc_windows_amd64.syso (icon, manifest, version info);
 #               only needed when the icon or version changes - the generated file is committed.
 param(
     [string]$Version = "0.2.0",
@@ -50,8 +50,8 @@ if (-not $SkipTests) {
     }
 }
 
-$running = Get-Process claude-usage -ErrorAction SilentlyContinue
+$running = Get-Process burnbar -ErrorAction SilentlyContinue
 if ($running) { Write-Host "Stopping running meter..."; $running | Stop-Process; Start-Sleep -Milliseconds 500 }
-Step "build" { go build -trimpath -ldflags "-H windowsgui -s -w -X main.version=$Version" -o bin\claude-usage.exe ./cmd/claude-usage }
+Step "build" { go build -trimpath -ldflags "-H windowsgui -s -w -X main.version=$Version" -o bin\burnbar.exe ./cmd/burnbar }
 Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
-Write-Host "Built bin\claude-usage.exe $Version" -ForegroundColor Green
+Write-Host "Built bin\burnbar.exe $Version" -ForegroundColor Green

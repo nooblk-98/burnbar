@@ -5,8 +5,8 @@ import (
 	"errors"
 	"runtime"
 
-	"claude-usage/internal/config"
-	"claude-usage/internal/history"
+	"github.com/nooblk-98/burnbar/internal/config"
+	"github.com/nooblk-98/burnbar/internal/history"
 
 	"golang.org/x/sys/windows"
 )
@@ -16,7 +16,7 @@ func Run(demo bool) error {
 	// Win32 windows belong to the thread that created them; keep the message loop on one OS thread.
 	runtime.LockOSThread()
 
-	mutex, err := windows.CreateMutex(nil, false, utf16(`Local\ClaudeUsageMeter`))
+	mutex, err := windows.CreateMutex(nil, false, utf16(`Local\BurnBar`))
 	if errors.Is(err, windows.ERROR_ALREADY_EXISTS) {
 		return nil
 	}

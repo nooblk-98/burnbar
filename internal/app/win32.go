@@ -4,7 +4,7 @@ import (
 	"syscall"
 	"unsafe"
 
-	"claude-usage/internal/layout"
+	"github.com/nooblk-98/burnbar/internal/layout"
 
 	"golang.org/x/sys/windows"
 )

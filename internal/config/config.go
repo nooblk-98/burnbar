@@ -1,4 +1,4 @@
-// Package config stores the meter's settings and alert state in %APPDATA%\ClaudeUsageMeter.
+// Package config stores the meter's settings and alert state in %APPDATA%\BurnBar.
 package config
 
 import (
@@ -34,7 +34,11 @@ func Dir() string {
 	if base == "" {
 		base, _ = os.UserConfigDir()
 	}
-	dir := filepath.Join(base, "ClaudeUsageMeter")
+	dir := filepath.Join(base, "BurnBar")
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		// Pre-rename builds used "ClaudeUsageMeter"; carry their settings and history over.
+		os.Rename(filepath.Join(base, "ClaudeUsageMeter"), dir)
+	}
 	os.MkdirAll(dir, 0o755)
 	return dir
 }

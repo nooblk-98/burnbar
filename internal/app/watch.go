@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"claude-usage/internal/usage"
+	"github.com/nooblk-98/burnbar/internal/usage"
 
 	"golang.org/x/sys/windows"
 )

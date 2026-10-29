@@ -1,4 +1,4 @@
-// Command claude-usage shows Claude's 5-hour and 7-day usage limits as two bars on the Windows taskbar.
+// Command burnbar shows Claude's 5-hour and 7-day usage limits as two bars on the Windows taskbar.
 package main
 
 import (
@@ -12,11 +12,11 @@ import (
 	"path/filepath"
 	"time"
 
-	"claude-usage/internal/app"
-	"claude-usage/internal/config"
-	"claude-usage/internal/history"
-	"claude-usage/internal/render"
-	"claude-usage/internal/usage"
+	"github.com/nooblk-98/burnbar/internal/app"
+	"github.com/nooblk-98/burnbar/internal/config"
+	"github.com/nooblk-98/burnbar/internal/history"
+	"github.com/nooblk-98/burnbar/internal/render"
+	"github.com/nooblk-98/burnbar/internal/usage"
 )
 
 // version is set at build time with -ldflags "-X main.version=...".
@@ -27,7 +27,7 @@ func main() {
 	once := flag.Bool("once", false, "print current usage to stdout and exit")
 	snapshot := flag.String("snapshot", "", "write widget and popup PNGs to this folder and exit")
 	flag.Parse()
-	usage.UserAgent = "claude-usage-meter/" + version
+	usage.UserAgent = "burnbar/" + version
 
 	var err error
 	switch {

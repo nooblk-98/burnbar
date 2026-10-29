@@ -19,7 +19,7 @@ and then submitted to winget. Signed builds run without Smart App Control or Sma
      <?xml version="1.0" encoding="utf-8"?>
      <artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
        <zip-file>
-         <pe-file path="claude-usage.exe">
+         <pe-file path="burnbar.exe">
            <authenticode-sign />
          </pe-file>
        </zip-file>
@@ -49,7 +49,7 @@ git push origin v0.2.0
 
 The `build` workflow tests and builds, submits the exe to SignPath and waits (up to an hour)
 for the signing request to be approved in SignPath, checks the signature, then creates the GitHub
-release with `claude-usage.exe` and `claude-usage.exe.sha256`.
+release with `burnbar.exe` and `burnbar.exe.sha256`.
 
 ## 3. winget
 
@@ -60,16 +60,16 @@ submitted by hand:
    (`winget install wingetcreate`) and run:
 
    ```powershell
-   wingetcreate new https://github.com/<owner>/<repo>/releases/download/v0.2.0/claude-usage.exe
+   wingetcreate new https://github.com/nooblk-98/burnbar/releases/download/v0.2.0/burnbar.exe
    ```
 
-   Use installer type **portable**, package identifier `<Publisher>.<AppName>` (for example
-   `nooblk-98.UsageMeterForClaude`), and let it open the pull request to `microsoft/winget-pkgs`.
+   Use installer type **portable**, package identifier `nooblk-98.BurnBar`, command alias
+   `burnbar`, and let it open the pull request to `microsoft/winget-pkgs`.
 2. Wait for that pull request to be merged.
 3. For automatic updates on later tags:
    - Fork `microsoft/winget-pkgs` to your account.
    - Create a classic personal access token with the `public_repo` scope and save it as the
      secret `WINGET_TOKEN`.
-   - Set variables `WINGET_PACKAGE_ID` (the identifier above) and `WINGET_ENABLED` = `true`.
+   - Set variables `WINGET_PACKAGE_ID` = `nooblk-98.BurnBar` and `WINGET_ENABLED` = `true`.
 
 Each new `v*` tag then opens a winget-pkgs pull request for the new version automatically.

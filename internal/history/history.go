@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"claude-usage/internal/usage"
+	"github.com/nooblk-98/burnbar/internal/usage"
 )
 
 const keep = 8 * 24 * time.Hour

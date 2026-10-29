@@ -59,7 +59,7 @@ func (u Usage) All() []*Window {
 const apiURL = "https://api.anthropic.com/api/oauth/usage"
 
 // UserAgent is sent with API requests; main sets it to include the build version.
-var UserAgent = "claude-usage-meter/dev"
+var UserAgent = "burnbar/dev"
 
 var (
 	httpClient     = &http.Client{Timeout: 20 * time.Second}

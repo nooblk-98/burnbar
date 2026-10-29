@@ -12,8 +12,8 @@ import (
 	"sync"
 	"time"
 
-	"claude-usage/internal/history"
-	"claude-usage/internal/usage"
+	"github.com/nooblk-98/burnbar/internal/history"
+	"github.com/nooblk-98/burnbar/internal/usage"
 
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/basicfont"

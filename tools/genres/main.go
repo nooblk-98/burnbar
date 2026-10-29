@@ -1,4 +1,4 @@
-// genres draws the app icon (assets/icon.png) and writes cmd/claude-usage/rsrc_windows_amd64.syso
+// genres draws the app icon (assets/icon.png) and writes cmd/burnbar/rsrc_windows_amd64.syso
 // (icon, manifest, version info), which `go build` links into the exe automatically.
 // Run it from the repository root: go run ./tools/genres 0.2.0
 package main
@@ -45,7 +45,7 @@ func main() {
 		log.Fatal(err)
 	}
 	rs.SetManifest(winres.AppManifest{
-		Identity:            winres.AssemblyIdentity{Name: "ClaudeUsageMeter", Version: v},
+		Identity:            winres.AssemblyIdentity{Name: "BurnBar", Version: v},
 		Description:         "Claude usage meter for the Windows taskbar",
 		Compatibility:       winres.Win10AndAbove,
 		ExecutionLevel:      winres.AsInvoker,
@@ -57,10 +57,10 @@ func main() {
 	vi.SetFileVersion(ver4)
 	vi.SetProductVersion(ver4)
 	for k, val := range map[string]string{
-		version.ProductName:      "Claude Usage Meter",
-		version.FileDescription:  "Claude Usage Meter",
-		version.InternalName:     "claude-usage",
-		version.OriginalFilename: "claude-usage.exe",
+		version.ProductName:      "BurnBar",
+		version.FileDescription:  "BurnBar",
+		version.InternalName:     "burnbar",
+		version.OriginalFilename: "burnbar.exe",
 		version.FileVersion:      ver,
 		version.ProductVersion:   ver,
 	} {
@@ -68,7 +68,7 @@ func main() {
 	}
 	rs.SetVersionInfo(vi)
 
-	f, err := os.Create("cmd/claude-usage/rsrc_windows_amd64.syso")
+	f, err := os.Create("cmd/burnbar/rsrc_windows_amd64.syso")
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -49,14 +49,14 @@ jobs:
 
       - name: Build
         shell: pwsh
-        run: go build -trimpath -ldflags "-H windowsgui -s -w -X main.version=${{ steps.version.outputs.version }}" -o bin/claude-usage.exe ./cmd/claude-usage
+        run: go build -trimpath -ldflags "-H windowsgui -s -w -X main.version=${{ steps.version.outputs.version }}" -o bin/burnbar.exe ./cmd/burnbar
 
       - name: Upload unsigned build
         id: upload
         uses: actions/upload-artifact@v4
         with:
-          name: claude-usage-unsigned
-          path: bin/claude-usage.exe
+          name: burnbar-unsigned
+          path: bin/burnbar.exe
           if-no-files-found: error
 
   release:
@@ -84,18 +84,18 @@ jobs:
       - name: Verify signature
         shell: pwsh
         run: |
-          $sig = Get-AuthenticodeSignature signed/claude-usage.exe
+          $sig = Get-AuthenticodeSignature signed/burnbar.exe
           "Status: $($sig.Status)  Signer: $($sig.SignerCertificate.Subject)"
-          if ($sig.Status -ne "Valid") { throw "claude-usage.exe is not validly signed" }
+          if ($sig.Status -ne "Valid") { throw "burnbar.exe is not validly signed" }
 
       - name: Publish GitHub release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $hash = (Get-FileHash signed/claude-usage.exe -Algorithm SHA256).Hash.ToLower()
-          "$hash  claude-usage.exe" | Out-File -Encoding ascii signed/claude-usage.exe.sha256
-          gh release create "$env:GITHUB_REF_NAME" signed/claude-usage.exe signed/claude-usage.exe.sha256 `
+          $hash = (Get-FileHash signed/burnbar.exe -Algorithm SHA256).Hash.ToLower()
+          "$hash  burnbar.exe" | Out-File -Encoding ascii signed/burnbar.exe.sha256
+          gh release create "$env:GITHUB_REF_NAME" signed/burnbar.exe signed/burnbar.exe.sha256 `
             --repo "$env:GITHUB_REPOSITORY" --title "$env:GITHUB_REF_NAME" --generate-notes
 
   winget:
@@ -109,5 +109,5 @@ jobs:
           identifier: ${{ vars.WINGET_PACKAGE_ID }}
           version: ${{ needs.build.outputs.version }}
           release-tag: ${{ github.ref_name }}
-          installers-regex: 'claude-usage\.exe$'
+          installers-regex: 'burnbar\.exe$'
           token: ${{ secrets.WINGET_TOKEN }}

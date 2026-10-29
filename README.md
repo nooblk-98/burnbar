@@ -1,6 +1,7 @@
-# Claude Usage Meter
+# BurnBar
 
-A small Windows 11 taskbar widget that shows your Claude plan usage as two bars.
+**Claude usage meter for the Windows taskbar.** BurnBar shows how fast you're burning through
+your Claude plan limits as two small bars on the taskbar.
 
 ![Taskbar meter, dark taskbar](docs/images/widget-dark.png)
 ![Taskbar meter, light taskbar](docs/images/widget-light.png)
@@ -19,10 +20,10 @@ A small Windows 11 taskbar widget that shows your Claude plan usage as two bars.
 Requires Windows 10 or 11 and [Claude Code](https://claude.com/claude-code), signed in with a
 Claude subscription (the meter uses that login).
 
-- **winget**: `winget install <package-id>` (once the package is published)
-- **Manual**: download `claude-usage.exe` from the latest
-  [release](../../releases/latest), put it anywhere, and run it. Releases are code-signed, so
-  Smart App Control and SmartScreen let them run.
+- **winget**: `winget install nooblk-98.BurnBar` (once the package is published)
+- **Manual**: download `burnbar.exe` from the latest
+  [release](https://github.com/nooblk-98/burnbar/releases/latest), put it anywhere, and run it.
+  Releases are code-signed, so Smart App Control and SmartScreen let them run.
 
 Right-click the meter (or its tray icon) and tick **Start with Windows** to launch it at sign-in.
 
@@ -50,7 +51,7 @@ the same endpoint Claude Code's `/usage` command uses. It never modifies or refr
 token. If the token expires, run `claude` once.
 
 Settings, alert state and a week of usage history are stored locally in
-`%APPDATA%\ClaudeUsageMeter\`. Nothing is sent anywhere else, and there is no telemetry.
+`%APPDATA%\BurnBar\`. Nothing is sent anywhere else, and there is no telemetry.
 
 The usage endpoint is undocumented and may change or stop working at any time.
 
@@ -59,14 +60,14 @@ The usage endpoint is undocumented and may change or stop working at any time.
 Requires Go 1.24+ on Windows.
 
 ```powershell
-.\build.ps1                 # vet, test, build bin\claude-usage.exe
+.\build.ps1                 # vet, test, build bin\burnbar.exe
 .\build.ps1 -Resources      # also regenerate the icon, manifest and version info
 ```
 
 | Flag | Purpose |
 |---|---|
 | `-demo` | sample numbers and history, no API calls |
-| `-once` | print the raw API response and a summary, then exit (needs a console build: `go build -o bin\cu-cli.exe ./cmd/claude-usage`) |
+| `-once` | print the raw API response and a summary, then exit (needs a console build: `go build -o bin\cu-cli.exe ./cmd/burnbar`) |
 | `-snapshot <dir>` | write widget and popup PNGs (light and dark) to a folder, then exit; combine with `-demo` |
 
 Local builds are unsigned, so Windows **Smart App Control** may block them. Signed builds come
@@ -75,7 +76,7 @@ from the release workflow. See [docs/SIGNING.md](docs/SIGNING.md).
 ## Project layout
 
 ```
-cmd/claude-usage/     entry point, flags, embedded icon/manifest (rsrc_windows_amd64.syso)
+cmd/burnbar/     entry point, flags, embedded icon/manifest (rsrc_windows_amd64.syso)
 internal/app/         Windows UI: taskbar overlays, tray icon, popup, menu, timers, Win32 + UI Automation
 internal/usage/       reading the Claude Code login and parsing the usage API
 internal/render/      drawing the widget, popup, charts and tray icon

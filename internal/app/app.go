@@ -9,11 +9,11 @@ import (
 	"time"
 	"unsafe"
 
-	"claude-usage/internal/config"
-	"claude-usage/internal/history"
-	"claude-usage/internal/layout"
-	"claude-usage/internal/render"
-	"claude-usage/internal/usage"
+	"github.com/nooblk-98/burnbar/internal/config"
+	"github.com/nooblk-98/burnbar/internal/history"
+	"github.com/nooblk-98/burnbar/internal/layout"
+	"github.com/nooblk-98/burnbar/internal/render"
+	"github.com/nooblk-98/burnbar/internal/usage"
 
 	"golang.org/x/sys/windows/registry"
 )
@@ -42,8 +42,9 @@ const (
 	slotTTL      = 5 * time.Second
 	activeMinGap = 60 * time.Second
 
-	runKey   = `Software\Microsoft\Windows\CurrentVersion\Run`
-	runValue = "ClaudeUsageMeter"
+	runKey         = `Software\Microsoft\Windows\CurrentVersion\Run`
+	runValue       = "BurnBar"
+	legacyRunValue = "ClaudeUsageMeter" // pre-rename builds
 )
 
 var (
@@ -127,7 +128,7 @@ func (a *app) run() error {
 	for _, c := range []struct {
 		name string
 		proc uintptr
-	}{{"ClaudeUsageMain", mainProcCB}, {"ClaudeUsageOverlay", overlayProcCB}, {"ClaudeUsagePopup", popupProcCB}} {
+	}{{"BurnBarMain", mainProcCB}, {"BurnBarOverlay", overlayProcCB}, {"BurnBarPopup", popupProcCB}} {
 		wc := WNDCLASSEXW{LpfnWndProc: c.proc, HInstance: a.hinst, HCursor: cursor, HIcon: icon, LpszClassName: utf16(c.name)}
 		wc.CbSize = uint32(unsafe.Sizeof(wc))
 		if r, _, err := pRegisterClassExW.Call(uintptr(unsafe.Pointer(&wc))); r == 0 {
@@ -136,15 +137,16 @@ func (a *app) run() error {
 	}
 
 	// Hidden owner window: receives tray callbacks, timers and menu commands.
-	a.main, _, _ = pCreateWindowExW.Call(0, uintptr(unsafe.Pointer(utf16("ClaudeUsageMain"))),
-		uintptr(unsafe.Pointer(utf16("Claude Usage Meter"))), WS_POPUP, 0, 0, 0, 0, 0, 0, a.hinst, 0)
+	a.main, _, _ = pCreateWindowExW.Call(0, uintptr(unsafe.Pointer(utf16("BurnBarMain"))),
+		uintptr(unsafe.Pointer(utf16("BurnBar"))), WS_POPUP, 0, 0, 0, 0, 0, 0, a.hinst, 0)
 	a.popup, _, _ = pCreateWindowExW.Call(WS_EX_LAYERED|WS_EX_TOOLWINDOW|WS_EX_TOPMOST,
-		uintptr(unsafe.Pointer(utf16("ClaudeUsagePopup"))), uintptr(unsafe.Pointer(utf16("Claude usage details"))),
+		uintptr(unsafe.Pointer(utf16("BurnBarPopup"))), uintptr(unsafe.Pointer(utf16("BurnBar details"))),
 		WS_POPUP, 0, 0, 0, 0, 0, 0, a.hinst, 0)
 	if a.main == 0 || a.popup == 0 {
 		return fmt.Errorf("could not create windows")
 	}
 
+	migrateStartup()
 	a.uia = newUIA()
 	r, _, _ := pRegisterWindowMessageW.Call(uintptr(unsafe.Pointer(utf16("TaskbarCreated"))))
 	a.taskbarCreated = uint32(r)
@@ -338,7 +340,7 @@ func systemUsesLightTheme() bool {
 
 func (a *app) newOverlay(tb uintptr) *overlay {
 	hwnd, _, _ := pCreateWindowExW.Call(WS_EX_LAYERED|WS_EX_TOOLWINDOW|WS_EX_TOPMOST|WS_EX_NOACTIVATE,
-		uintptr(unsafe.Pointer(utf16("ClaudeUsageOverlay"))), uintptr(unsafe.Pointer(utf16("Claude Usage"))),
+		uintptr(unsafe.Pointer(utf16("BurnBarOverlay"))), uintptr(unsafe.Pointer(utf16("BurnBar"))),
 		WS_POPUP, 0, 0, 0, 0, 0, 0, a.hinst, 0)
 	return &overlay{hwnd: hwnd, tb: tb}
 }
@@ -577,6 +579,19 @@ func setStartup(on bool) {
 	}
 	if exe, err := os.Executable(); err == nil {
 		k.SetStringValue(runValue, `"`+exe+`"`)
+	}
+}
+
+// migrateStartup replaces a start-with-Windows entry left by a pre-rename build with one for this exe.
+func migrateStartup() {
+	k, err := registry.OpenKey(registry.CURRENT_USER, runKey, registry.QUERY_VALUE|registry.SET_VALUE)
+	if err != nil {
+		return
+	}
+	defer k.Close()
+	if _, _, err := k.GetStringValue(legacyRunValue); err == nil {
+		k.DeleteValue(legacyRunValue)
+		setStartup(true)
 	}
 }
 
