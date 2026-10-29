@@ -105,6 +105,10 @@ func writeSnapshots(dir string, demo bool, mode string) error {
 			"widget-hover-" + name + ".png": render.GroupWidget(1.25, readings, th, true),
 			"popup-" + name + ".png":        render.GroupPopup(1.25, panels, th, 1400, 1000),
 		}
+		if len(readings) > 0 {
+			imgs["widget-narrow-"+name+".png"] = render.ProviderWidgetSized(1.25, readings[0], th, false, render.MinimumWidgetWidth(1.25))
+			imgs["widget-floating-"+name+".png"] = render.FloatingWidget(render.ProviderWidget(1.25, readings[0], th, false), th, 1.25)
+		}
 		if len(readings) > 1 {
 			from := render.ProviderWidget(1.25, readings[0], th, false)
 			to := render.ProviderWidget(1.25, readings[1], th, false)

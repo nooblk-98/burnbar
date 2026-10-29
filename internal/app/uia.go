@@ -36,6 +36,7 @@ const (
 	vtElemFindAll           = 6
 	vtElemClassName         = 30
 	vtElemControlType       = 21
+	vtElemIsOffscreen       = 38
 	vtElemBoundingRectangle = 43
 	vtArrayLength           = 3
 	vtArrayGetElement       = 4
@@ -102,11 +103,18 @@ func (u *uiaClient) items(taskbar uintptr) ([]layout.Item, bool) {
 	}
 	defer arr.release()
 	var n int32
-	arr.call(vtArrayLength, uintptr(unsafe.Pointer(&n)))
+	if arr.call(vtArrayLength, uintptr(unsafe.Pointer(&n))) != 0 || n <= 0 {
+		return nil, false
+	}
 	items := make([]layout.Item, 0, n)
 	for i := int32(0); i < n; i++ {
 		var el *comObj
 		if hr := arr.call(vtArrayGetElement, uintptr(i), uintptr(unsafe.Pointer(&el))); hr != 0 || el == nil {
+			continue
+		}
+		var offscreen int32
+		if el.call(vtElemIsOffscreen, uintptr(unsafe.Pointer(&offscreen))) == 0 && offscreen != 0 {
+			el.release()
 			continue
 		}
 		var r RECT
@@ -119,5 +127,5 @@ func (u *uiaClient) items(taskbar uintptr) ([]layout.Item, bool) {
 		}
 		el.release()
 	}
-	return items, true
+	return items, len(items) > 0
 }

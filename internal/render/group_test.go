@@ -32,3 +32,18 @@ func TestProviderRendering(t *testing.T) {
 		t.Fatal("Codex error must not hide Claude")
 	}
 }
+
+func TestNarrowMeterAndFloatingSurface(t *testing.T) {
+	u := usage.DemoProvider(usage.Claude)
+	for _, scale := range []float64{1, 1.25, 2} {
+		width := MinimumWidgetWidth(scale)
+		meter := ProviderWidgetSized(scale, u, NewTheme(false), false, width)
+		if meter.Rect.Dx() != width {
+			t.Fatalf("unexpected narrow width: %v", meter.Rect)
+		}
+		floating := FloatingWidget(meter, NewTheme(false), scale)
+		if floating.Rect != meter.Rect || floating.RGBAAt(width/2, meter.Rect.Dy()/2).A != 255 {
+			t.Fatal("floating fallback must keep its footprint and have an opaque surface")
+		}
+	}
+}

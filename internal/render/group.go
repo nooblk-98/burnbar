@@ -59,7 +59,16 @@ func GroupWidget(scale float64, readings []usage.Usage, th Theme, hover bool) *i
 
 // ProviderWidget fits a provider caption and two quota rows into the original footprint.
 func ProviderWidget(scale float64, u usage.Usage, th Theme, hover bool) *image.RGBA {
-	w, h := WidgetSize(scale)
+	w, _ := WidgetSize(scale)
+	return ProviderWidgetSized(scale, u, th, hover, w)
+}
+
+func MinimumWidgetWidth(scale float64) int { return int(math.Ceil(96 * scale)) }
+
+// ProviderWidgetSized keeps text readable while shortening the meter tracks.
+func ProviderWidgetSized(scale float64, u usage.Usage, th Theme, hover bool, width int) *image.RGBA {
+	_, h := WidgetSize(scale)
+	w := max(width, MinimumWidgetWidth(scale))
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
 	for i := 3; i < len(img.Pix); i += 4 {
 		img.Pix[i] = 1
@@ -77,7 +86,7 @@ func ProviderWidget(scale float64, u usage.Usage, th Theme, hover bool) *image.R
 		label := usage.WindowShortLabel(win, fallback)
 		drawText(img, face, label, scale, baseline, th.sub)
 		bx := math.Max(23*scale, textWidth(face, label)+3*scale)
-		drawMeter(img, bx, cy-2.5*scale, 88*scale, cy+2.5*scale, win, th, scale)
+		drawMeter(img, bx, cy-2.5*scale, float64(w)-42*scale, cy+2.5*scale, win, th, scale)
 		value := "–"
 		if u.Err != "" && win == nil {
 			value = "!"
@@ -90,6 +99,16 @@ func ProviderWidget(scale float64, u usage.Usage, th Theme, hover bool) *image.R
 		}
 		drawTextRight(img, face, value, float64(w)-scale, baseline, barColor(win))
 	}
+	return img
+}
+
+// FloatingWidget gives the fallback above a crowded taskbar an opaque surface.
+func FloatingWidget(meter *image.RGBA, th Theme, scale float64) *image.RGBA {
+	img := image.NewRGBA(meter.Rect)
+	w, h := float64(img.Rect.Dx()), float64(img.Rect.Dy())
+	fillRoundRect(img, 0, 0, w, h, 4*scale, th.border)
+	fillRoundRect(img, 1, 1, w-1, h-1, 4*scale-1, th.bg)
+	draw.Draw(img, img.Rect, meter, image.Point{}, draw.Over)
 	return img
 }
 

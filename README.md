@@ -43,7 +43,8 @@ Codex window lengths come from your account rather than assuming every plan uses
   tick means you'll hit the limit before it resets.
 - **Stays out of the way**: finds free space on the taskbar so it never covers app icons, follows the
   light/dark theme and display scaling, and hides during fullscreen apps and games.
-  If the taskbar is full, the meter hides until space opens; the tray icon and details stay available.
+  The meter narrows when taskbar buttons need more room. If the taskbar is full, it moves just
+  above the bar until space opens. Search, Start and ordinary window clicks keep it visible.
 - **Details panel**: separate provider panels, reported quota windows, reset times, and independent
   24-hour and 7-day history charts. Claude also shows this week's usage by product when available.
 - **Alerts**: Windows notifications at 80% and 95%, and when a limit you'd been close to resets.

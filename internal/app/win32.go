@@ -26,6 +26,8 @@ var (
 	pFindWindowW                   = user32.NewProc("FindWindowW")
 	pFindWindowExW                 = user32.NewProc("FindWindowExW")
 	pGetWindowRect                 = user32.NewProc("GetWindowRect")
+	pGetForegroundWindow           = user32.NewProc("GetForegroundWindow")
+	pGetClassNameW                 = user32.NewProc("GetClassNameW")
 	pIsWindowVisible               = user32.NewProc("IsWindowVisible")
 	pSetWindowPos                  = user32.NewProc("SetWindowPos")
 	pShowWindow                    = user32.NewProc("ShowWindow")
@@ -88,6 +90,7 @@ const (
 	SWP_NOSIZE          = 0x0001
 	SWP_NOMOVE          = 0x0002
 	SWP_NOACTIVATE      = 0x0010
+	SWP_SHOWWINDOW      = 0x0040
 	HWND_TOPMOST        = ^uintptr(0) // (HWND)-1
 	ULW_ALPHA           = 0x02
 	AC_SRC_ALPHA        = 0x01

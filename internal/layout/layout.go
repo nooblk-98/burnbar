@@ -35,6 +35,19 @@ func Analyze(items []Item) (occupied []Rect, trayLeft int, ok bool) {
 	return occupied, trayLeft, trayLeft >= 0
 }
 
+// AnalyzeTaskbar ignores flyouts and cached controls outside the taskbar itself.
+// Search and tray popups may be exposed under the taskbar's automation tree.
+func AnalyzeTaskbar(items []Item, bounds Rect) ([]Rect, int, bool) {
+	visible := make([]Item, 0, len(items))
+	for _, item := range items {
+		if item.Rect.Bottom <= bounds.Top || item.Rect.Top >= bounds.Bottom || item.Rect.Right <= bounds.Left || item.Rect.Left >= bounds.Right {
+			continue
+		}
+		visible = append(visible, item)
+	}
+	return Analyze(visible)
+}
+
 type span struct{ l, r int }
 
 // PickSlot chooses an x for a widget of width w between left and right that avoids the occupied
@@ -82,4 +95,26 @@ func PickSlot(occupied []Rect, left, right, w, margin int, mode string) (x int, 
 		}
 	}
 	return 0, false
+}
+
+// PickSizedSlot retains the preferred width whenever it fits, then finds the
+// widest readable meter that can occupy one of the remaining gaps.
+func PickSizedSlot(occupied []Rect, left, right, preferred, minimum, margin int, mode string) (x, width int, ok bool) {
+	if minimum <= 0 || preferred < minimum {
+		return 0, 0, false
+	}
+	if x, ok := PickSlot(occupied, left, right, preferred, margin, mode); ok {
+		return x, preferred, true
+	}
+	low, high := minimum, preferred-1
+	for low <= high {
+		candidate := (low + high) / 2
+		if fitX, fits := PickSlot(occupied, left, right, candidate, margin, mode); fits {
+			x, width, ok = fitX, candidate, true
+			low = candidate + 1
+		} else {
+			high = candidate - 1
+		}
+	}
+	return
 }

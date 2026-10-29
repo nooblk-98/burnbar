@@ -54,12 +54,13 @@ func (a *app) widget(ov *overlay, p placement) *image.RGBA {
 	}
 	active := a.activeProvider % len(readings)
 	if a.flipStarted.IsZero() {
-		return render.ProviderWidget(p.scale, readings[active], render.NewTheme(p.light), ov.hover)
+		return render.ProviderWidgetSized(p.scale, readings[active], render.NewTheme(p.light), ov.hover, p.w)
 	}
-	if ov.flipAt != a.flipStarted || ov.flipScale != p.scale || ov.flipLight != p.light {
-		ov.flipFrom = render.ProviderWidget(p.scale, readings[a.flipPrevious%len(readings)], render.NewTheme(p.light), false)
-		ov.flipTo = render.ProviderWidget(p.scale, readings[active], render.NewTheme(p.light), false)
+	if ov.flipAt != a.flipStarted || ov.flipScale != p.scale || ov.flipLight != p.light || ov.flipWidth != p.w {
+		ov.flipFrom = render.ProviderWidgetSized(p.scale, readings[a.flipPrevious%len(readings)], render.NewTheme(p.light), false, p.w)
+		ov.flipTo = render.ProviderWidgetSized(p.scale, readings[active], render.NewTheme(p.light), false, p.w)
 		ov.flipAt, ov.flipScale, ov.flipLight = a.flipStarted, p.scale, p.light
+		ov.flipWidth = p.w
 	}
 	return render.FlipDown(ov.flipFrom, ov.flipTo, float64(time.Since(a.flipStarted))/float64(flipDuration))
 }
@@ -73,7 +74,11 @@ func (a *app) animateFlip() {
 	}
 	for _, ov := range a.overlays {
 		if ov.last.visible {
-			a.paint(ov.hwnd, a.widget(ov, ov.last), ov.last.x, ov.last.y)
+			img := a.widget(ov, ov.last)
+			if ov.last.floating {
+				img = render.FloatingWidget(img, render.NewTheme(ov.last.light), ov.last.scale)
+			}
+			a.paint(ov.hwnd, img, ov.last.x, ov.last.y)
 		}
 	}
 }
