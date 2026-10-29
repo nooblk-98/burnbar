@@ -45,6 +45,12 @@ const (
 	slotTTL      = 5 * time.Second
 	activeMinGap = 60 * time.Second
 
+	// After a window opens or closes, the taskbar slides its buttons and may collapse the
+	// weather widget for a second or more. Re-read it until it holds still.
+	relayoutEvery     = 250 * time.Millisecond
+	relayoutMaxPasses = 20 // 5s
+	relayoutSteady    = 3  // unchanged reads in a row before the layout counts as settled
+
 	runKey         = `Software\Microsoft\Windows\CurrentVersion\Run`
 	runValue       = "BurnBar"
 	legacyRunValue = "ClaudeUsageMeter" // pre-rename builds
@@ -76,6 +82,7 @@ type overlay struct {
 	slotActualW      int
 	slotOK           bool
 	slotAt           time.Time
+	slotLayout       string // taskbar spans the slot was chosen from
 	flipAt           time.Time
 	flipFrom, flipTo *image.RGBA
 	flipScale        float64
@@ -102,7 +109,9 @@ type app struct {
 
 	overlays       map[uintptr]*overlay // by taskbar window
 	slotsDirty     bool
+	layoutMoved    bool // a taskbar's spans changed since the previous read
 	relayoutPasses int
+	steadyPasses   int
 	activeProvider int
 	flipStarted    time.Time
 	flipPrevious   int
@@ -438,10 +447,15 @@ func (a *app) slot(ov *overlay, tb taskbar, w int, scale float64) (int, int, boo
 	if !ok || (!hasTray && len(occupied) == 0) {
 		// Explorer can temporarily stop answering automation calls while Search
 		// or a flyout opens. Keep the last safe slot briefly and retry next tick.
+		a.layoutMoved = true
 		if ov.slotOK && ov.slotW == w && time.Since(ov.slotAt) < slotTTL+2*time.Second && ov.slotX >= int(tb.rect.Left)+margin && ov.slotX+w <= int(tb.rect.Right)-margin {
 			return ov.slotX, ov.slotActualW, true
 		}
 		return ov.slotX, w, false
+	}
+	if spans := fmt.Sprint(occupied, trayLeft); spans != ov.slotLayout {
+		ov.slotLayout = spans
+		a.layoutMoved = true
 	}
 	if !hasTray {
 		trayLeft = int(tb.rect.Right) - int(300*scale)
@@ -808,12 +822,19 @@ func mainProc(hwnd, msg, wparam, lparam uintptr) uintptr {
 		case timerFlip:
 			a.animateFlip()
 		case timerRelayout:
-			// Run twice: once right away, once after the taskbar's button animation settles.
+			// Follow the taskbar's animation: a slot read mid-slide can end up under Start.
 			a.slotsDirty = true
+			a.layoutMoved = false
 			a.place(false)
-			if a.relayoutPasses--; a.relayoutPasses > 0 {
-				a.oneShot(timerRelayout, 700*time.Millisecond)
+			if a.layoutMoved {
+				a.steadyPasses = 0
 			} else {
+				a.steadyPasses++
+			}
+			if a.relayoutPasses--; a.relayoutPasses > 0 && a.steadyPasses < relayoutSteady {
+				a.oneShot(timerRelayout, relayoutEvery)
+			} else {
+				a.relayoutPasses = 0
 				pKillTimer.Call(a.main, timerRelayout)
 			}
 		case timerReset:
@@ -930,9 +951,12 @@ func winEventProc(hook, event, hwnd, idObject, idChild, thread, ts uintptr) uint
 		a.raise()
 		return 0
 	}
-	if int32(idObject) == OBJID_WINDOW && idChild == 0 && a.relayoutPasses == 0 {
-		a.relayoutPasses = 2
-		a.oneShot(timerRelayout, 400*time.Millisecond)
+	if int32(idObject) == OBJID_WINDOW && idChild == 0 {
+		a.steadyPasses = 0
+		if a.relayoutPasses == 0 {
+			a.relayoutPasses = relayoutMaxPasses
+			a.oneShot(timerRelayout, relayoutEvery)
+		}
 	}
 	return 0
 }
