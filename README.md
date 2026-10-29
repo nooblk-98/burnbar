@@ -1,9 +1,13 @@
+<div align="center">
+
 # BurnBar
 
-**Claude usage meter for the Windows taskbar.** BurnBar shows how fast you're burning through
-your Claude plan limits as two small bars on the taskbar.
+**Claude usage meter for the Windows taskbar.**<br>
+BurnBar shows how fast you're burning through your Claude plan limits as two small bars on the taskbar.
 
-![Taskbar meter, dark taskbar](docs/images/image.png)
+<img src="docs/images/image.png" alt="BurnBar on the Windows taskbar">
+
+</div>
 
 - **5h**: the rolling 5-hour session limit (orange)
 - **7d**: the weekly limit across all models (green)
