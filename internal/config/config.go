@@ -1,0 +1,72 @@
+// Package config stores the meter's settings and alert state in %APPDATA%\ClaudeUsageMeter.
+package config
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+)
+
+type Config struct {
+	ShowOverlay     bool   `json:"showOverlay"`
+	AllMonitors     bool   `json:"allMonitors"`
+	Position        string `json:"position"` // "auto", "left" or "right" (next to the tray)
+	IntervalMinutes int    `json:"intervalMinutes"`
+	Alerts          bool   `json:"alerts"`
+
+	// AlertState remembers, per limit, which thresholds were already announced in the current window.
+	AlertState map[string]AlertState `json:"alertState,omitempty"`
+}
+
+type AlertState struct {
+	ResetsAt int64   `json:"resetsAt"`
+	Level    int     `json:"level"`
+	Percent  float64 `json:"percent"`
+}
+
+func Default() Config {
+	return Config{ShowOverlay: true, AllMonitors: true, Position: "auto", IntervalMinutes: 3, Alerts: true}
+}
+
+// Dir is the folder holding settings and history; it is created if missing.
+func Dir() string {
+	base := os.Getenv("APPDATA")
+	if base == "" {
+		base, _ = os.UserConfigDir()
+	}
+	dir := filepath.Join(base, "ClaudeUsageMeter")
+	os.MkdirAll(dir, 0o755)
+	return dir
+}
+
+func path() string { return filepath.Join(Dir(), "config.json") }
+
+func Load() Config {
+	c := Default()
+	if b, err := os.ReadFile(path()); err == nil {
+		json.Unmarshal(b, &c)
+	}
+	switch c.Position {
+	case "auto", "left", "right":
+	default:
+		c.Position = "auto"
+	}
+	if c.IntervalMinutes < 1 {
+		c.IntervalMinutes = 3
+	}
+	if c.AlertState == nil {
+		c.AlertState = map[string]AlertState{}
+	}
+	return c
+}
+
+func (c Config) Save() {
+	b, err := json.MarshalIndent(c, "", "  ")
+	if err != nil {
+		return
+	}
+	tmp := path() + ".tmp"
+	if os.WriteFile(tmp, b, 0o644) == nil {
+		os.Rename(tmp, path())
+	}
+}

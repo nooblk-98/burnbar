@@ -1,0 +1,14 @@
+module claude-usage
+
+go 1.26.0
+
+require (
+	golang.org/x/image v0.47.0
+	golang.org/x/sys v0.49.0
+)
+
+require (
+	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646 // indirect
+	github.com/tc-hib/winres v0.3.1 // indirect
+	golang.org/x/text v0.43.0 // indirect
+)
