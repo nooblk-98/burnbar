@@ -58,9 +58,10 @@ winget install nooblk-98.BurnBar
 put it anywhere (for example `%LOCALAPPDATA%\Programs\BurnBar`), and run it.
 
 > [!NOTE]
-> Release builds are code-signed, so Smart App Control and SmartScreen let them run. The first
-> signed release and the winget package are still in progress. Until then,
-> [build from source](#build-from-source).
+> Code signing through the SignPath Foundation and the winget package are still in progress, so
+> current releases are **unsigned pre-releases**. Windows Smart App Control blocks unsigned apps,
+> and SmartScreen shows *Windows protected your PC* (choose **More info → Run anyway**). Signed
+> releases will follow once signing is approved.
 
 ## Usage
 
