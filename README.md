@@ -15,12 +15,9 @@ See how fast you're burning through your plan limits without leaving what you're
 
 [Features](#features) • [Installation](#installation) • [Usage](#usage) • [How it works](#how-it-works) • [Build from source](#build-from-source)
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/meter-rotation-dark.gif">
-  <img src="docs/images/meter-rotation-light.gif" alt="BurnBar flipping between Claude and Codex in one compact taskbar meter" width="325">
-</picture>
+<img src="docs/images/burnbar-demo.gif" alt="BurnBar on Windows, showing the rotating taskbar meter and Claude and Codex usage details" width="848">
 <br>
-<sub>Sample readings. One compact meter, two providers, a downward flip every 8 seconds.</sub>
+<sub>BurnBar in action: Claude and Codex usage on the taskbar, with details a click away.</sub>
 
 </div>
 
