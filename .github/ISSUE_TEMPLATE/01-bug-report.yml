@@ -1,0 +1,71 @@
+name: Bug report
+description: Report a problem with BurnBar on Windows.
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve BurnBar. Please search existing issues first.
+        Do not share access tokens, credential files, account IDs, or private session logs.
+  - type: input
+    id: version
+    attributes:
+      label: BurnBar version
+      description: Release tag, or commit hash for a source build.
+      placeholder: v0.2.1
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version and build
+      description: Find these under Settings > System > About, or run winver.
+      placeholder: Windows 11 25H2, OS build ...
+    validations:
+      required: true
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Affected provider
+      options:
+        - Claude
+        - Codex
+        - Both
+        - Taskbar or other UI
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What happened?
+      description: Describe the problem and what you expected instead. Include any visible error.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Start BurnBar...
+        2. Click...
+        3. Observe...
+    validations:
+      required: true
+  - type: input
+    id: display
+    attributes:
+      label: Display and taskbar setup
+      description: For placement issues, include monitor count, scaling, taskbar alignment, and auto-hide setting.
+      placeholder: Two monitors, 125% scaling, centered taskbar, auto-hide off
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots or recording
+      description: Drag images or a short recording here. Hide private information first.
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Optional diagnostics
+      description: For placement issues, paste output from a console build with -taskbar-layout. Review it for private information first.
+      render: text

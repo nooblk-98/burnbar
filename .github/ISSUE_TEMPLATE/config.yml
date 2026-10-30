@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Roadmap and provider requests
+    url: https://github.com/nooblk-98/burnbar/blob/main/ROADMAP.md
+    about: See current priorities before proposing an integration.
+  - name: Privacy and data access
+    url: https://github.com/nooblk-98/burnbar/blob/main/PRIVACY.md
+    about: Learn what BurnBar reads, sends, and stores locally.

@@ -1,0 +1,60 @@
+name: AI tool support request
+description: Suggest another AI tool or provider for BurnBar.
+title: "[Provider]: "
+labels: [enhancement, provider-request]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Tell us which tool you want to track. Requests help shape the roadmap;
+        support depends on a reliable, permitted way to read usage limits.
+        Share public documentation, never credentials or private account responses.
+  - type: input
+    id: tool
+    attributes:
+      label: AI tool or provider
+      placeholder: Tool name
+    validations:
+      required: true
+  - type: input
+    id: website
+    attributes:
+      label: Official website
+      placeholder: https://...
+    validations:
+      required: true
+  - type: textarea
+    id: usage
+    attributes:
+      label: What should BurnBar show?
+      description: Describe the quota, reset time, or usage information you need and where the tool currently shows it.
+    validations:
+      required: true
+  - type: dropdown
+    id: account
+    attributes:
+      label: Account type
+      options:
+        - Subscription plan
+        - API usage or credits
+        - Both
+        - Not sure
+    validations:
+      required: true
+  - type: input
+    id: plan
+    attributes:
+      label: Plan name (optional)
+      description: A public plan name is enough. Do not include account identifiers or billing details.
+  - type: textarea
+    id: documentation
+    attributes:
+      label: Usage API or CLI documentation (optional)
+      description: Link official documentation for reading account limits, if you know of any.
+  - type: checkboxes
+    id: help
+    attributes:
+      label: Help with this integration
+      options:
+        - label: I can help test this tool on Windows.
+        - label: I am interested in contributing an integration.
