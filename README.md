@@ -69,6 +69,27 @@ put it anywhere (for example `%LOCALAPPDATA%\Programs\BurnBar`), and run it.
 > BurnBar is distributed **unsigned**. Windows Smart App Control may block it,
 > and SmartScreen may show *Windows protected your PC*.
 
+### If Smart App Control blocks BurnBar (Windows 11)
+
+> [!WARNING]
+> Turning off Smart App Control reduces protection for your whole PC. Recent Windows
+> updates support turning it back on, but availability depends on your device and
+> configuration. If Windows warns that restoring it requires a reset or reinstall,
+> do not proceed expecting a temporary change.
+
+1. Install the latest Windows updates before changing this setting.
+2. Open **Windows Security > App & browser control > Smart App Control settings**.
+3. If you trust the download and choose to proceed, select **Off** before running
+   BurnBar. Read the confirmation carefully.
+4. Download `burnbar.exe` from this repository's releases, place it in your preferred
+   folder, and run it. BurnBar is portable and has no installer.
+5. Afterwards, return to **Smart App Control settings** and select **On**, if
+   available. Restart if Windows asks, and confirm protection is on.
+
+Turning protection back on may block BurnBar again. Running it once does not create
+an exception for the app. See [Microsoft's Smart App Control FAQ](https://support.microsoft.com/en-us/windows/security/threat-malware-protection/smart-app-control-frequently-asked-questions)
+for current requirements and limitations.
+
 ## How it works
 
 **Claude:** BurnBar reads the OAuth token that Claude Code saves in `%USERPROFILE%\.claude\.credentials.json`
