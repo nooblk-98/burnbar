@@ -65,20 +65,12 @@ You need Windows 10 or 11 and a signed-in provider:
 Both providers rotate through the meter by default. A missing login affects only that provider. Select
 **Usage providers** from the right-click menu to hide a provider you don't use.
 
-**winget**
-
-```powershell
-winget install nooblk-98.BurnBar
-```
-
-**Manual**: download `burnbar.exe` from the [latest release](https://github.com/nooblk-98/burnbar/releases/latest),
+Download `burnbar.exe` from the [releases page](https://github.com/nooblk-98/burnbar/releases),
 put it anywhere (for example `%LOCALAPPDATA%\Programs\BurnBar`), and run it.
 
 > [!NOTE]
-> Code signing through the SignPath Foundation and the winget package are still in progress, so
-> current releases are **unsigned pre-releases**. Windows Smart App Control blocks unsigned apps,
-> and SmartScreen shows *Windows protected your PC* (choose **More info → Run anyway**). Signed
-> releases will follow once signing is approved.
+> BurnBar is distributed **unsigned**. Windows Smart App Control may block it,
+> and SmartScreen may show *Windows protected your PC*.
 
 ## Usage
 
@@ -169,8 +161,8 @@ The executable also accepts a few flags for development:
 | `-once` | Print usage summaries for the selected providers, then exit. Needs a console build: `go build -o bin\burnbar-cli.exe ./cmd/burnbar` |
 
 > [!WARNING]
-> Local builds aren't signed, so Windows **Smart App Control** may block them. Signed builds come
-> from the [release workflow](.github/workflows/build.yml), described in [docs/SIGNING.md](docs/SIGNING.md).
+> Local builds and release builds are unsigned, so Windows **Smart App Control** may block them.
+> See [Releasing BurnBar](docs/RELEASING.md) for the release process.
 
 <details>
 <summary><strong>Project layout</strong></summary>
@@ -186,19 +178,7 @@ internal/history/     usage history for the charts
 tools/genres/         icon and Windows resource generator
 assets/               app icon
 docs/                 screenshots and release guide
-.github/workflows/    CI, signed releases and winget publishing
+.github/workflows/    CI, GitHub releases and optional winget publishing
 ```
 
 </details>
-
-## Code signing policy
-
-Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by
-[SignPath Foundation](https://signpath.org).
-
-- Committers and reviewers: [Lahiru S Liyanage](https://github.com/nooblk-98)
-- Approvers: [Lahiru S Liyanage](https://github.com/nooblk-98)
-
-Every release is built by GitHub Actions from this repository's source and signed only after manual
-approval. The program reads the signed-in user's own Claude usage from `api.anthropic.com` and
-Codex usage through the installed local Codex CLI, as described under [How it works](#how-it-works).

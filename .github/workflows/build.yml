@@ -1,10 +1,5 @@
-# Builds and tests every push and pull request. Pushing a tag like v0.2.0 also:
-#   1. sends the exe to SignPath for code signing (SignPath Foundation certificate),
-#   2. publishes a GitHub release with the signed exe and its SHA-256 checksum,
-#   3. opens a winget-pkgs pull request for the new version (when WINGET_ENABLED is "true").
-# Until SignPath is configured (SIGNPATH_ORGANIZATION_ID unset), tags publish the unsigned build
-# as a pre-release instead, and winget is skipped.
-# One-time setup is described in docs/SIGNING.md.
+# Builds and tests every push and pull request. Version tags publish the unsigned
+# executable and its SHA-256 checksum directly to GitHub Releases.
 name: build
 
 on:
@@ -20,8 +15,9 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
+    permissions:
+      contents: write
     outputs:
-      artifact-id: ${{ steps.upload.outputs.artifact-id }}
       version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v7
@@ -53,89 +49,29 @@ jobs:
         shell: pwsh
         run: go build -trimpath -ldflags "-H windowsgui -s -w -X main.version=${{ steps.version.outputs.version }}" -o bin/burnbar.exe ./cmd/burnbar
 
-      - name: Upload unsigned build
-        id: upload
-        uses: actions/upload-artifact@v7
-        with:
-          name: burnbar-unsigned
-          path: bin/burnbar.exe
-          if-no-files-found: error
-
-  release:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
-    runs-on: windows-latest
-    permissions:
-      contents: write
-      actions: read
-    outputs:
-      signed: ${{ steps.mode.outputs.signed }}
-    steps:
-      - name: Choose signed or unsigned release
-        id: mode
-        shell: pwsh
-        run: |
-          $signed = if ("${{ vars.SIGNPATH_ORGANIZATION_ID }}") { "true" } else { "false" }
-          "signed=$signed" >> $env:GITHUB_OUTPUT
-          "Signed release: $signed"
-
-      - name: Sign with SignPath
-        if: steps.mode.outputs.signed == 'true'
-        uses: signpath/github-action-submit-signing-request@v2
-        with:
-          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
-          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
-          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
-          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
-          artifact-configuration-slug: ${{ vars.SIGNPATH_ARTIFACT_CONFIGURATION_SLUG }}
-          github-artifact-id: ${{ needs.build.outputs.artifact-id }}
-          wait-for-completion: true
-          # Release signing waits for a manual approval in SignPath.
-          wait-for-completion-timeout-in-seconds: 3600
-          output-artifact-directory: dist
-
-      - name: Verify signature
-        if: steps.mode.outputs.signed == 'true'
-        shell: pwsh
-        run: |
-          $sig = Get-AuthenticodeSignature dist/burnbar.exe
-          "Status: $($sig.Status)  Signer: $($sig.SignerCertificate.Subject)"
-          if ($sig.Status -ne "Valid") { throw "burnbar.exe is not validly signed" }
-
-      - name: Use unsigned build
-        if: steps.mode.outputs.signed != 'true'
-        uses: actions/download-artifact@v8
-        with:
-          name: burnbar-unsigned
-          path: dist
-
       - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $hash = (Get-FileHash dist/burnbar.exe -Algorithm SHA256).Hash.ToLower()
-          "$hash  burnbar.exe" | Out-File -Encoding ascii dist/burnbar.exe.sha256
-          $extra = @()
-          if ("${{ steps.mode.outputs.signed }}" -ne "true") {
-            @"
-          > [!WARNING]
-          > This is an **unsigned pre-release**. Windows Smart App Control blocks unsigned apps, and SmartScreen
-          > shows *Windows protected your PC* (choose **More info → Run anyway**). Signed releases will follow
-          > once code signing through the SignPath Foundation is approved.
+          $hash = (Get-FileHash bin/burnbar.exe -Algorithm SHA256).Hash.ToLower()
+          "$hash  burnbar.exe" | Out-File -Encoding ascii bin/burnbar.exe.sha256
+          @"
+          BurnBar is distributed unsigned.
 
           SHA-256 of ``burnbar.exe``: ``$hash``
           "@ | Out-File -Encoding utf8 notes.md
-            $extra = @("--prerelease", "--notes-file", "notes.md")
-          }
-          gh release create "$env:GITHUB_REF_NAME" dist/burnbar.exe dist/burnbar.exe.sha256 `
-            --repo "$env:GITHUB_REPOSITORY" --title "BurnBar $env:GITHUB_REF_NAME" --generate-notes @extra
+          $extra = @()
+          if ($env:GITHUB_REF_NAME.Contains("-")) { $extra = @("--prerelease") }
+          gh release create "$env:GITHUB_REF_NAME" bin/burnbar.exe bin/burnbar.exe.sha256 `
+            --repo "$env:GITHUB_REPOSITORY" --verify-tag --title "BurnBar $env:GITHUB_REF_NAME" `
+            --generate-notes --notes-file notes.md @extra
 
   winget:
-    # Updates an existing winget package; the very first version must be submitted by hand (see docs/SIGNING.md).
-    # Unsigned pre-releases are never sent to winget.
-    if: startsWith(github.ref, 'refs/tags/v') && vars.WINGET_ENABLED == 'true' && needs.release.outputs.signed == 'true'
-    needs: [build, release]
+    # Requires an existing winget package; see docs/RELEASING.md.
+    if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-') && vars.WINGET_ENABLED == 'true'
+    needs: build
     runs-on: windows-latest
     steps:
       - uses: vedantmgoyal9/winget-releaser@v2
