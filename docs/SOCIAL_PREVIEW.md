@@ -1,8 +1,8 @@
 # Repository social preview
 
 The social card is [assets/social-preview.png](../assets/social-preview.png).
-It is 1280 by 640 pixels and under 1 MB. It is separate from the animated
-README banner.
+It is 1280 by 640 pixels and under 1 MB. The README uses it as its main banner
+and shows the animated demo in a separate section.
 
 ## Apply it on GitHub
 

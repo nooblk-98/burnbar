@@ -13,11 +13,9 @@
 **Claude and Codex usage meter for the Windows taskbar.**<br>
 See how fast you're burning through your plan limits without leaving what you're doing.
 
-[Features](#features) • [Installation](#installation) • [Build from source](#build-from-source)
+[Features](#features) • [See it in action](#see-it-in-action) • [Installation](#installation) • [Build from source](#build-from-source)
 
-<img src="docs/images/burnbar-demo.gif" alt="BurnBar on Windows, showing the rotating taskbar meter and Claude and Codex usage details" width="848">
-<br>
-<sub>BurnBar in action: Claude and Codex usage on the taskbar, with details a click away.</sub>
+<img src="assets/social-preview.png" alt="BurnBar, Claude and Codex on your Windows taskbar, with quotas, history, and alerts" width="848">
 
 </div>
 
@@ -49,6 +47,14 @@ Codex window lengths come from your account rather than assuming every plan uses
   a limit resets, backing off automatically if the API rate-limits.
 - **Multi-monitor**: a meter on every taskbar, plus a tray icon with tooltip and menu.
 - **Lightweight**: a single executable with no installer. Codex usage uses your existing Codex CLI.
+
+## See it in action
+
+<div align="center">
+<img src="docs/images/burnbar-demo.gif" alt="BurnBar on Windows, showing the rotating taskbar meter and Claude and Codex usage details" width="848">
+<br>
+<sub>BurnBar in action: Claude and Codex usage on the taskbar, with details a click away.</sub>
+</div>
 
 ## Installation
 
