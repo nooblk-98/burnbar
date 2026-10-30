@@ -4,6 +4,7 @@ package history
 import (
 	"bufio"
 	"encoding/json"
+	"io"
 	"math"
 	"os"
 	"path/filepath"
@@ -13,7 +14,11 @@ import (
 	"github.com/nooblk-98/burnbar/internal/usage"
 )
 
-const keep = 8 * 24 * time.Hour
+const (
+	keep         = 8 * 24 * time.Hour
+	compactEvery = time.Hour
+	maxLine      = 64 * 1024
+)
 
 // Sample is one fetched reading; S and W are the session and weekly percentages (-1 if unknown).
 type Sample struct {
@@ -23,9 +28,11 @@ type Sample struct {
 }
 
 type History struct {
-	mu      sync.Mutex
-	path    string // empty in demo mode: nothing is written
-	samples []Sample
+	mu          sync.Mutex
+	path        string // empty in demo mode: nothing is written
+	samples     []Sample
+	nextCompact time.Time
+	readFailed  bool // never replace a file whose contents were not fully read
 }
 
 // Load reads history.jsonl from dir, dropping readings older than eight days.
@@ -39,37 +46,86 @@ func LoadProvider(dir string, provider usage.Provider) *History {
 	if provider == usage.Codex {
 		name = "history-codex.jsonl"
 	}
-	h := &History{path: filepath.Join(dir, name)}
+	h := &History{path: filepath.Join(dir, name), nextCompact: time.Now().Add(compactEvery)}
 	f, err := os.Open(h.path)
 	if err != nil {
+		h.readFailed = !os.IsNotExist(err)
 		return h
 	}
-	cutoff := time.Now().Add(-keep).Unix()
-	sc := bufio.NewScanner(f)
-	for sc.Scan() {
-		var s Sample
-		if json.Unmarshal(sc.Bytes(), &s) == nil && s.T >= cutoff {
-			h.samples = append(h.samples, s)
-		}
+	readErr := h.read(f, time.Now().Add(-keep).Unix())
+	closeErr := f.Close()
+	h.readFailed = readErr != nil || closeErr != nil
+	if !h.readFailed {
+		h.rewrite()
 	}
-	f.Close()
-	h.rewrite()
 	return h
 }
 
-// rewrite compacts the file down to the samples still kept in memory.
-func (h *History) rewrite() {
-	tmp := h.path + ".tmp"
-	f, err := os.Create(tmp)
-	if err != nil {
-		return
+// read bounds memory for damaged lines, then continues with later readings.
+// Actual I/O failures are returned so the caller can preserve the original file.
+func (h *History) read(r io.Reader, cutoff int64) error {
+	reader := bufio.NewReader(r)
+	var line []byte
+	discard := false
+	for {
+		part, err := reader.ReadSlice('\n')
+		if !discard {
+			if len(line)+len(part) > maxLine {
+				line, discard = nil, true
+			} else {
+				line = append(line, part...)
+			}
+		}
+		if err == bufio.ErrBufferFull {
+			continue
+		}
+		if err != nil && err != io.EOF {
+			return err
+		}
+		var s Sample
+		if !discard && json.Unmarshal(line, &s) == nil && s.T >= cutoff {
+			h.samples = append(h.samples, s)
+		}
+		if err == io.EOF {
+			return nil
+		}
+		line, discard = line[:0], false
 	}
+}
+
+// rewrite replaces the file only after every retained sample was safely written.
+// The caller holds mu, or is still loading the history before sharing it.
+func (h *History) rewrite() error {
+	f, err := os.CreateTemp(filepath.Dir(h.path), ".history-*.tmp")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(f.Name())
 	enc := json.NewEncoder(f)
 	for _, s := range h.samples {
-		enc.Encode(s)
+		if err := enc.Encode(s); err != nil {
+			f.Close()
+			return err
+		}
 	}
-	f.Close()
-	os.Rename(tmp, h.path)
+	if err := f.Sync(); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	return os.Rename(f.Name(), h.path)
+}
+
+func (h *History) prune(cutoff int64) {
+	kept := h.samples[:0]
+	for _, s := range h.samples {
+		if s.T >= cutoff {
+			kept = append(kept, s)
+		}
+	}
+	h.samples = kept
 }
 
 func pct(w *usage.Window) float64 {
@@ -82,9 +138,25 @@ func pct(w *usage.Window) float64 {
 func (h *History) Add(u usage.Usage) {
 	s := Sample{T: u.UpdatedAt.Unix(), S: pct(u.FiveHour), W: pct(u.SevenDay)}
 	h.mu.Lock()
-	h.samples = append(h.samples, s)
-	h.mu.Unlock()
+	defer h.mu.Unlock()
+	now := time.Now()
+	cutoff := now.Add(-keep).Unix()
+	h.prune(cutoff)
+	if s.T >= cutoff {
+		h.samples = append(h.samples, s)
+	}
 	if h.path == "" {
+		return
+	}
+	// Compact at most hourly instead of rewriting eight days of data per fetch.
+	// A failed read must never lead to replacing unseen readings with our cache.
+	if !h.readFailed && !now.Before(h.nextCompact) {
+		h.nextCompact = now.Add(compactEvery)
+		if h.rewrite() == nil {
+			return // the replacement already contains this reading
+		}
+	}
+	if s.T < cutoff {
 		return
 	}
 	if f, err := os.OpenFile(h.path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644); err == nil {

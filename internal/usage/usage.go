@@ -144,6 +144,8 @@ type apiWindow struct {
 	ResetsAt    *string  `json:"resets_at"`
 }
 
+func validPercent(v float64) bool { return v >= 0 && v <= 100 }
+
 func parseTime(s *string) time.Time {
 	if s == nil {
 		return time.Time{}
@@ -198,8 +200,22 @@ func Parse(body []byte) Usage {
 		return Usage{Provider: Claude, Err: "unexpected response from usage API", UpdatedAt: time.Now()}
 	}
 	u := Usage{Provider: Claude, UpdatedAt: time.Now()}
+	invalid := func() Usage {
+		return Usage{Provider: Claude, Err: "invalid usage percentage from Claude", UpdatedAt: u.UpdatedAt}
+	}
+	for _, w := range []*apiWindow{r.FiveHour, r.SevenDay} {
+		if w != nil && w.Utilization != nil && !validPercent(*w.Utilization) {
+			return invalid()
+		}
+	}
 	for _, l := range r.Limits {
 		if l.Percent == nil {
+			continue
+		}
+		if !validPercent(*l.Percent) {
+			return invalid()
+		}
+		if l.Kind == "" {
 			continue
 		}
 		w := &Window{Key: l.Kind, Label: limitLabel(l.Kind), Percent: *l.Percent,
@@ -224,10 +240,13 @@ func Parse(body []byte) Usage {
 	}
 	if r.Breakdown != nil {
 		for _, row := range r.Breakdown.Rows {
-			if row.Percent > 0 {
+			if row.Percent > 0 && validPercent(row.Percent) {
 				u.Breakdown = append(u.Breakdown, Share{row.Name, row.Percent})
 			}
 		}
+	}
+	if len(u.All()) == 0 {
+		u.Err = "Claude returned no plan usage limits"
 	}
 	return u
 }

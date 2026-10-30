@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -236,7 +235,7 @@ func ParseCodex(body []byte) Usage {
 		main, found = *result.RateLimits, true
 	}
 	toWindow := func(w *codexWindow, key, label string) *Window {
-		if w == nil || w.UsedPercent == nil || math.IsNaN(*w.UsedPercent) || math.IsInf(*w.UsedPercent, 0) || *w.UsedPercent < 0 || *w.UsedPercent > 100 {
+		if w == nil || w.UsedPercent == nil || !validPercent(*w.UsedPercent) {
 			return nil
 		}
 		win := &Window{Key: key, Label: label, Percent: *w.UsedPercent}

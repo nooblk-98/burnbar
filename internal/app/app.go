@@ -30,7 +30,7 @@ const (
 	timerRefresh  = 2 // regular usage refresh
 	timerRelayout = 3 // shortly after windows open or close
 	timerReset    = 4 // just after the next limit resets
-	timerActive   = 5 // deferred refresh while Claude Code is busy
+	timerActive   = 5 // deferred refresh for providers with session activity
 	timerRotate   = 6 // switch the compact meter to the next provider
 	timerFlip     = 7 // animate only while a flip is in progress
 
@@ -108,10 +108,6 @@ type app struct {
 	readings map[usage.Provider]usage.Usage
 	fetches  map[usage.Provider]*fetchState
 
-	// main-thread state
-	lastFetch     time.Time
-	activePending bool
-
 	overlays       map[uintptr]*overlay // by taskbar window
 	slotsDirty     bool
 	layoutMoved    bool // a taskbar's spans changed since the previous read
@@ -138,9 +134,12 @@ type app struct {
 }
 
 type fetchState struct {
-	fetching      atomic.Bool
+	fetching atomic.Bool
+	// Remaining fields belong to the main thread.
 	cooldownUntil time.Time
 	backoff       time.Duration
+	lastFetch     time.Time
+	activePending bool
 }
 
 func providerID(p usage.Provider) uintptr {
@@ -277,20 +276,17 @@ func (a *app) refresh(manual bool) {
 
 func (a *app) refreshProvider(p usage.Provider, manual bool) {
 	state := a.fetches[p]
-	if !manual && time.Now().Before(state.cooldownUntil) {
+	if !state.beginFetch(time.Now(), manual) {
 		return
 	}
 	if a.demo {
 		a.mu.Lock()
 		a.readings[p] = usage.DemoProvider(p)
 		a.mu.Unlock()
+		state.fetching.Store(false)
 		pPostMessageW.Call(a.main, msgUsage, providerID(p), 0)
 		return
 	}
-	if !state.fetching.CompareAndSwap(false, true) {
-		return
-	}
-	a.lastFetch = time.Now()
 	go func() {
 		u := usage.FetchProvider(p)
 		a.mu.Lock()
@@ -335,22 +331,6 @@ func (a *app) onUsage(p usage.Provider) {
 	if a.popupVisible {
 		a.renderPopup()
 	}
-}
-
-// onActivity refreshes soon after Claude Code is used, but no more than once a minute.
-func (a *app) onActivity(p usage.Provider) {
-	if !a.enabled(p) {
-		return
-	}
-	if a.activePending {
-		return
-	}
-	if wait := activeMinGap - time.Since(a.lastFetch); wait > 0 {
-		a.activePending = true
-		a.oneShot(timerActive, wait)
-		return
-	}
-	a.refresh(false)
 }
 
 // scheduleResetRefresh fetches again right after the next limit resets, so the bar drops at once.
@@ -851,9 +831,7 @@ func mainProc(hwnd, msg, wparam, lparam uintptr) uintptr {
 			pKillTimer.Call(a.main, timerReset)
 			a.refresh(false)
 		case timerActive:
-			pKillTimer.Call(a.main, timerActive)
-			a.activePending = false
-			a.refresh(false)
+			a.refreshActivity()
 		}
 		return 0
 	case msg == msgUsage:
