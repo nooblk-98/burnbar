@@ -39,8 +39,14 @@ UI Automation. Fullscreen detection reads the foreground window's class, process
 filename, and bounds. These observations are used locally to position or hide
 the meter. BurnBar also reads Windows theme, scaling, and animation settings.
 
-Selecting **Start with Windows** adds BurnBar to the current user's Windows
-startup registry entry. The setting can be turned off in BurnBar's menu.
+On its first normal launch with a new profile, BurnBar enables **Start with Windows**
+by adding the executable to the current user's startup registry entry. Existing
+preferences are preserved, and the option can be turned off in BurnBar's menu.
+The choice is saved so later launches do not override an opt-out. Demo and
+diagnostic modes do not automatically add a startup entry.
+
+Choosing **Open GitHub repository** in the menu opens the project's public GitHub
+page in your default browser. The About dialog itself does not make a network request.
 
 ## Data saved on your PC
 
@@ -48,7 +54,7 @@ BurnBar stores its files under `%APPDATA%\BurnBar\`:
 
 | File | Contents |
 | --- | --- |
-| `config.json` | Provider selection, taskbar/display settings, refresh interval, and alert state, including quota percentages and reset timestamps |
+| `config.json` | Provider selection, startup preference, taskbar/display settings, refresh interval, and alert state, including quota percentages and reset timestamps |
 | `history.jsonl` | Claude session and weekly percentages with timestamps |
 | `history-codex.jsonl` | Codex primary and secondary percentages with timestamps |
 

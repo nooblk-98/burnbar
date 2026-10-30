@@ -13,7 +13,7 @@ import (
 )
 
 // Run shows the meter and blocks until the user exits. A second instance exits immediately.
-func Run(demo bool, mode string) error {
+func Run(demo bool, mode, version string) error {
 	// Win32 windows belong to the thread that created them; keep the message loop on one OS thread.
 	runtime.LockOSThread()
 
@@ -23,7 +23,7 @@ func Run(demo bool, mode string) error {
 	}
 	defer windows.CloseHandle(mutex)
 
-	a := &app{demo: demo, cfg: config.Load()}
+	a := &app{demo: demo, version: version, cfg: config.Load()}
 	if mode != "" {
 		a.cfg.Providers = mode
 	}

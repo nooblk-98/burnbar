@@ -3,7 +3,6 @@ package app
 import (
 	"fmt"
 	"image"
-	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -32,18 +31,20 @@ const (
 	timerRotate   = 6 // switch the compact meter to the next provider
 	timerFlip     = 7 // animate only while a flip is in progress
 
-	cmdDetails   = 1
-	cmdRefresh   = 2
-	cmdOverlay   = 3
-	cmdMonitors  = 4
-	cmdAlerts    = 5
-	cmdStartup   = 6
-	cmdExit      = 9
-	cmdPosition  = 100 // + index into positions
-	cmdInterval  = 200 // + minutes
-	cmdProvider  = 300 // + index into providerModes
-	slotTTL      = 5 * time.Second
-	activeMinGap = 60 * time.Second
+	cmdDetails    = 1
+	cmdRefresh    = 2
+	cmdOverlay    = 3
+	cmdMonitors   = 4
+	cmdAlerts     = 5
+	cmdStartup    = 6
+	cmdAbout      = 7
+	cmdRepository = 8
+	cmdExit       = 9
+	cmdPosition   = 100 // + index into positions
+	cmdInterval   = 200 // + minutes
+	cmdProvider   = 300 // + index into providerModes
+	slotTTL       = 5 * time.Second
+	activeMinGap  = 60 * time.Second
 
 	// After a window opens or closes, the taskbar slides its buttons and may collapse the
 	// weather widget for a second or more. Re-read it until it holds still.
@@ -91,9 +92,10 @@ type overlay struct {
 }
 
 type app struct {
-	demo bool
-	cfg  config.Config
-	hist map[usage.Provider]*history.History
+	demo    bool
+	version string
+	cfg     config.Config
+	hist    map[usage.Provider]*history.History
 
 	hinst uintptr
 	main  uintptr
@@ -197,7 +199,7 @@ func (a *app) run() error {
 		return fmt.Errorf("could not create windows")
 	}
 
-	migrateStartup()
+	startupErr := a.initializeStartup()
 	a.uia = newUIA()
 	r, _, _ := pRegisterWindowMessageW.Call(uintptr(unsafe.Pointer(utf16("TaskbarCreated"))))
 	a.taskbarCreated = uint32(r)
@@ -212,6 +214,9 @@ func (a *app) run() error {
 
 	a.place(true)
 	a.updateTray()
+	if startupErr != nil {
+		a.notify("Start with Windows could not be updated", startupErr.Error(), true)
+	}
 	a.refresh(true)
 	pSetTimer.Call(a.main, timerLayout, 1000, 0)
 	a.setRefreshTimer()
@@ -671,46 +676,6 @@ func (a *app) removeTray() {
 	a.trayAdded = false
 }
 
-// Start with Windows
-
-func startupEnabled() bool {
-	k, err := registry.OpenKey(registry.CURRENT_USER, runKey, registry.QUERY_VALUE)
-	if err != nil {
-		return false
-	}
-	defer k.Close()
-	_, _, err = k.GetStringValue(runValue)
-	return err == nil
-}
-
-func setStartup(on bool) {
-	k, err := registry.OpenKey(registry.CURRENT_USER, runKey, registry.SET_VALUE)
-	if err != nil {
-		return
-	}
-	defer k.Close()
-	if !on {
-		k.DeleteValue(runValue)
-		return
-	}
-	if exe, err := os.Executable(); err == nil {
-		k.SetStringValue(runValue, `"`+exe+`"`)
-	}
-}
-
-// migrateStartup replaces a start-with-Windows entry left by a pre-rename build with one for this exe.
-func migrateStartup() {
-	k, err := registry.OpenKey(registry.CURRENT_USER, runKey, registry.QUERY_VALUE|registry.SET_VALUE)
-	if err != nil {
-		return
-	}
-	defer k.Close()
-	if _, _, err := k.GetStringValue(legacyRunValue); err == nil {
-		k.DeleteValue(legacyRunValue)
-		setStartup(true)
-	}
-}
-
 // Context menu
 
 func (a *app) showMenu() {
@@ -757,6 +722,9 @@ func (a *app) showMenu() {
 	add(menu, MF_STRING|check(a.cfg.Alerts), cmdAlerts, "Usage alerts (80% / 95% / reset)")
 	add(menu, MF_STRING|check(startupEnabled()), cmdStartup, "Start with Windows")
 	add(menu, MF_SEPARATOR, 0, "")
+	add(menu, MF_STRING, cmdAbout, "About BurnBar...")
+	add(menu, MF_STRING, cmdRepository, "Open GitHub repository")
+	add(menu, MF_SEPARATOR, 0, "")
 	add(menu, MF_STRING, cmdExit, "Exit")
 
 	var pt POINT
@@ -779,7 +747,18 @@ func (a *app) showMenu() {
 	case cmd == cmdAlerts:
 		a.cfg.Alerts = !a.cfg.Alerts
 	case cmd == cmdStartup:
-		setStartup(!startupEnabled())
+		on := !startupEnabled()
+		if err := setStartup(on); err != nil {
+			a.showMessage("Start with Windows could not be updated", err.Error())
+			return
+		}
+		a.cfg.StartWithWindows = &on
+	case cmd == cmdAbout:
+		a.showAbout()
+		return
+	case cmd == cmdRepository:
+		a.openRepository()
+		return
 	case cmd >= cmdProvider && cmd < cmdProvider+uintptr(len(providerModes)):
 		a.cfg.Providers = providerModes[cmd-cmdProvider].key
 		a.resetRotation()

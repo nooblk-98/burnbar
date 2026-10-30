@@ -51,7 +51,7 @@ func main() {
 	case *snapshot != "":
 		err = writeSnapshots(*snapshot, *demo, mode)
 	default:
-		err = app.Run(*demo, *providers)
+		err = app.Run(*demo, *providers, version)
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)

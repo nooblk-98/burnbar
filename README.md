@@ -47,6 +47,10 @@ Codex window lengths come from your account rather than assuming every plan uses
   a limit resets, backing off automatically if the API rate-limits.
 - **Multi-monitor**: a meter on every taskbar, plus a tray icon with tooltip and menu.
 - **Lightweight**: a single executable with no installer. Codex usage uses your existing Codex CLI.
+- **Start with Windows**: enabled on first launch for new users; turn it off from the
+  right-click menu at any time. Existing startup preferences are preserved.
+- **About**: right-click the meter or tray icon for the app version, developer credits,
+  and a link to this repository.
 
 ## See it in action
 
@@ -70,6 +74,9 @@ Both providers rotate through the meter by default. A missing login affects only
 
 Download `burnbar.exe` from the [releases page](https://github.com/nooblk-98/burnbar/releases),
 put it anywhere (for example `%LOCALAPPDATA%\Programs\BurnBar`), and run it.
+
+On its first normal launch, BurnBar enables **Start with Windows** for a new profile.
+You can disable it from the right-click menu. Demo and diagnostic modes do not enable it.
 
 > [!NOTE]
 > BurnBar is distributed **unsigned**. Windows Smart App Control may block it,

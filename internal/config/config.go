@@ -16,6 +16,8 @@ type Config struct {
 	Position        string `json:"position"` // "auto", "left" or "right" (next to the tray)
 	IntervalMinutes int    `json:"intervalMinutes"`
 	Alerts          bool   `json:"alerts"`
+	// Nil identifies a legacy profile whose preference still lives in the registry.
+	StartWithWindows *bool `json:"startWithWindows,omitempty"`
 
 	// AlertState remembers, per limit, which thresholds were already announced in the current window.
 	AlertState map[string]AlertState `json:"alertState,omitempty"`
@@ -28,7 +30,8 @@ type AlertState struct {
 }
 
 func Default() Config {
-	return Config{Providers: "both", ShowOverlay: true, AllMonitors: true, Position: "auto", IntervalMinutes: 3, Alerts: true}
+	startup := true
+	return Config{Providers: "both", ShowOverlay: true, AllMonitors: true, Position: "auto", IntervalMinutes: 3, Alerts: true, StartWithWindows: &startup}
 }
 
 // Dir is the folder holding settings and history; it is created if missing.
@@ -51,6 +54,8 @@ func path() string { return filepath.Join(Dir(), "config.json") }
 func Load() Config {
 	c := Default()
 	if b, err := os.ReadFile(path()); err == nil {
+		// Existing profiles without this field must retain their registry choice.
+		c.StartWithWindows = nil
 		json.Unmarshal(b, &c)
 	}
 	switch c.Position {

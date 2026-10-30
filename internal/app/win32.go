@@ -23,6 +23,7 @@ var (
 	pDispatchMessageW              = user32.NewProc("DispatchMessageW")
 	pPostQuitMessage               = user32.NewProc("PostQuitMessage")
 	pPostMessageW                  = user32.NewProc("PostMessageW")
+	pMessageBoxW                   = user32.NewProc("MessageBoxW")
 	pFindWindowW                   = user32.NewProc("FindWindowW")
 	pFindWindowExW                 = user32.NewProc("FindWindowExW")
 	pGetWindowRect                 = user32.NewProc("GetWindowRect")
@@ -66,6 +67,7 @@ var (
 	pDeleteDC           = gdi32.NewProc("DeleteDC")
 
 	pShellNotifyIconW             = shell32.NewProc("Shell_NotifyIconW")
+	pShellExecuteW                = shell32.NewProc("ShellExecuteW")
 	pSHQueryUserNotificationState = shell32.NewProc("SHQueryUserNotificationState")
 
 	pGetModuleHandleW = kernel32.NewProc("GetModuleHandleW")
@@ -88,6 +90,7 @@ const (
 	WM_NULL             = 0x0000
 	WM_APP              = 0x8000
 	SW_HIDE             = 0
+	SW_SHOWNORMAL       = 1
 	SW_SHOWNOACTIVATE   = 4
 	SWP_NOSIZE          = 0x0001
 	SWP_NOMOVE          = 0x0002
@@ -136,6 +139,8 @@ const (
 	MONITOR_DEFAULTTONEAR   = 2
 	IMAGE_ICON              = 1
 	LR_DEFAULTSIZE          = 0x40
+	MB_OK                   = 0x00000000
+	MB_ICONINFORMATION      = 0x00000040
 )
 
 type MONITORINFO struct {
