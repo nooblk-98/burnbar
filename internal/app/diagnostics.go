@@ -19,6 +19,7 @@ func WriteTaskbarLayout(w io.Writer) error {
 	uia := newUIA()
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
+	taskbars := findTaskbars(true)
 	var meters []map[string]any
 	var previous uintptr
 	for {
@@ -28,10 +29,15 @@ func WriteTaskbarLayout(w io.Writer) error {
 		}
 		bounds, _ := windowRect(hwnd)
 		visible, _, _ := pIsWindowVisible.Call(hwnd)
-		meters = append(meters, map[string]any{"bounds": bounds, "visible": visible != 0})
+		owner, _, _ := pGetWindow.Call(hwnd, GW_OWNER)
+		taskbarOwned := false
+		for _, tb := range taskbars {
+			taskbarOwned = taskbarOwned || owner == tb.hwnd
+		}
+		meters = append(meters, map[string]any{"bounds": bounds, "visible": visible != 0, "taskbarOwned": taskbarOwned})
 		previous = hwnd
 	}
-	for _, tb := range findTaskbars(true) {
+	for _, tb := range taskbars {
 		items, readable := uia.items(tb.hwnd)
 		occupied, tray, hasTray := layout.AnalyzeTaskbar(items, tb.rect)
 		scale := float64(dpiForWindow(tb.hwnd)) / 96

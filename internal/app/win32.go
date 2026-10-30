@@ -26,6 +26,7 @@ var (
 	pFindWindowW                   = user32.NewProc("FindWindowW")
 	pFindWindowExW                 = user32.NewProc("FindWindowExW")
 	pGetWindowRect                 = user32.NewProc("GetWindowRect")
+	pGetWindow                     = user32.NewProc("GetWindow")
 	pGetForegroundWindow           = user32.NewProc("GetForegroundWindow")
 	pGetClassNameW                 = user32.NewProc("GetClassNameW")
 	pIsWindowVisible               = user32.NewProc("IsWindowVisible")
@@ -72,6 +73,7 @@ var (
 
 const (
 	WS_POPUP            = 0x80000000
+	GW_OWNER            = 4
 	WS_EX_LAYERED       = 0x00080000
 	WS_EX_TOOLWINDOW    = 0x00000080
 	WS_EX_TOPMOST       = 0x00000008

@@ -420,9 +420,11 @@ func systemUsesLightTheme() bool {
 }
 
 func (a *app) newOverlay(tb uintptr) *overlay {
+	// Keep the popup above its taskbar owner even when Search or Start raises
+	// the shell. An independent topmost window can remain visible but covered.
 	hwnd, _, _ := pCreateWindowExW.Call(WS_EX_LAYERED|WS_EX_TOOLWINDOW|WS_EX_TOPMOST|WS_EX_NOACTIVATE,
 		uintptr(unsafe.Pointer(utf16("BurnBarOverlay"))), uintptr(unsafe.Pointer(utf16("BurnBar"))),
-		WS_POPUP, 0, 0, 0, 0, 0, 0, a.hinst, 0)
+		WS_POPUP, 0, 0, 0, 0, tb, 0, a.hinst, 0)
 	return &overlay{hwnd: hwnd, tb: tb}
 }
 
