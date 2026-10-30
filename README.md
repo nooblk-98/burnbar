@@ -13,7 +13,7 @@
 **Claude and Codex usage meter for the Windows taskbar.**<br>
 See how fast you're burning through your plan limits without leaving what you're doing.
 
-[Features](#features) • [Installation](#installation) • [Usage](#usage) • [How it works](#how-it-works) • [Build from source](#build-from-source)
+[Features](#features) • [Installation](#installation) • [How it works](#how-it-works) • [Build from source](#build-from-source)
 
 <img src="docs/images/burnbar-demo.gif" alt="BurnBar on Windows, showing the rotating taskbar meter and Claude and Codex usage details" width="848">
 <br>
@@ -68,47 +68,6 @@ put it anywhere (for example `%LOCALAPPDATA%\Programs\BurnBar`), and run it.
 > [!NOTE]
 > BurnBar is distributed **unsigned**. Windows Smart App Control may block it,
 > and SmartScreen may show *Windows protected your PC*.
-
-## Usage
-
-Run `burnbar.exe`. The meter appears on the taskbar, and an icon appears in the notification area.
-With both providers enabled, the meter switches between **Claude** and **Codex** every 8 seconds.
-The provider name above the bars identifies the reading; hover to pause rotation.
-The duration beside each bar is reported by the provider (commonly `5h` and `7d`). A dash means
-that quota wasn't reported; an exclamation mark means usage is unavailable. Click for details.
-
-| On the meter | Meaning |
-|---|---|
-| **5h** bar | Share of the rolling 5-hour session limit used |
-| **7d** bar | Share of the weekly limit (all models) used |
-| Thin tick | How far through the window you are in time (the pace marker) |
-| Red bar | 90% or more used |
-
-| Action | Result |
-|---|---|
-| Hover the meter | Pauses rotation and shows time until each limit resets |
-| Click the meter or tray icon | Opens the details panel (click it to refresh, <kbd>Esc</kbd> to close) |
-| Right-click the meter or tray icon | Opens the settings menu |
-
-<div align="center">
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/popup-dark.png">
-  <img src="docs/images/popup-light.png" alt="Claude and Codex details with separate quota bars, reset times and usage history" width="810">
-</picture>
-<br>
-<sub>Details for both providers, using sample data. <a href="docs/images/popup-dark.png">Dark theme</a> · <a href="docs/images/popup-light.png">Light theme</a></sub>
-</div>
-
-From the right-click menu you can:
-
-- **Refresh now** or change the **Refresh interval** (1, 3, 5 or 10 minutes)
-- Choose **Usage providers**: *Claude + Codex*, *Claude only*, or *Codex only*
-- Choose the **Position**: *Auto* (free space), *Left side* or *Next to tray icons*
-- Toggle **Show on taskbar**, **Show on all monitors** and **Usage alerts**
-- Turn on **Start with Windows**
-
-> [!TIP]
-> Turn on **Start with Windows** once, and BurnBar launches every time you sign in.
 
 ## How it works
 
