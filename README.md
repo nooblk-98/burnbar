@@ -136,8 +136,9 @@ cd burnbar
 .\bin\burnbar.exe
 ```
 
-`build.ps1` runs vet and the tests, then builds `bin\burnbar.exe`. Add `-Resources` to regenerate
-the icon, manifest and version info, or `-SkipTests` to skip the tests.
+`build.ps1` runs vet and any locally available tests, then builds `bin\burnbar.exe`.
+Add `-Resources` to regenerate the icon, manifest and version info, or `-SkipTests`
+to skip local tests. Test sources are excluded from Git.
 
 The executable also accepts a few flags for development:
 

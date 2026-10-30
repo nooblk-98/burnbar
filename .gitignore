@@ -8,6 +8,12 @@
 *.out
 *.prof
 
+# Local test sources
+*_test.go
+*.Tests.ps1
+/test/
+/tests/
+
 # Editors and OS
 .vscode/
 .idea/

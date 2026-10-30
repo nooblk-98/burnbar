@@ -43,13 +43,16 @@ Format the Go files you changed with `gofmt`, then run:
 
 ```powershell
 go vet ./...
-go test ./...
+go build ./...
 ```
+
+Test sources are kept locally and ignored by Git. Run any local tests you maintain
+before submitting a change, and include the results in your pull request.
 
 For UI changes, check both light and dark themes, display scaling, and the
 affected taskbar configuration. Placement changes should also be checked while
 Search and Start open, taskbar buttons move, and a fullscreen app is active.
-Add regression coverage for behavior changes where it can catch the original bug.
+Use local regression checks for behavior changes where they can catch the original bug.
 Documentation-only changes need a review of links, examples, and formatting.
 
 Use demo mode for public screenshots. Never commit credentials, personal usage

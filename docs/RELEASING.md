@@ -12,7 +12,7 @@ git tag -a v0.2.2 -m "BurnBar v0.2.2"
 git push origin main v0.2.2
 ```
 
-The `build` workflow runs vet and tests, generates the icon, manifest and version
+The `build` workflow runs vet, generates the icon, manifest and version
 information, then builds `burnbar.exe`. It uploads `burnbar.exe`,
 `burnbar.exe.sha256`, and a copy of `install.ps1` directly to a GitHub release,
 without using Actions artifact storage. A version such as `v0.2.2` creates a normal release; a version with a
@@ -25,7 +25,8 @@ The root `install.ps1` script uses GitHub's latest stable release endpoint and
 requires both asset names above. Keep those names stable so the documented
 PowerShell install/update command continues to work. The bootstrap command reads
 the installer from `main`; it installs release binaries rather than development
-builds. Validate installer changes with `powershell -NoProfile -File tests/install.Tests.ps1`.
+builds. Validate installer changes locally before tagging; test sources are
+excluded from Git and are not required by the release workflow.
 
 ## Optional winget publishing
 

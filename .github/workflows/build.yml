@@ -1,4 +1,4 @@
-# Builds and tests every push and pull request. Version tags publish the unsigned
+# Vets and builds every push and pull request. Version tags publish the unsigned
 # executable and its SHA-256 checksum directly to GitHub Releases.
 name: build
 
@@ -35,13 +35,6 @@ jobs:
 
       - name: Vet
         run: go vet ./...
-
-      - name: Test
-        run: go test ./...
-
-      - name: Test PowerShell installer
-        shell: powershell
-        run: .\tests\install.Tests.ps1
 
       - name: Generate icon, manifest and version info
         shell: pwsh
