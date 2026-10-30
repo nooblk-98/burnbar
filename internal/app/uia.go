@@ -17,6 +17,7 @@ var (
 	oleaut32 = windows.NewLazySystemDLL("oleaut32.dll")
 
 	pCoInitializeEx   = ole32.NewProc("CoInitializeEx")
+	pCoUninitialize   = ole32.NewProc("CoUninitialize")
 	pCoCreateInstance = ole32.NewProc("CoCreateInstance")
 	pSysFreeString    = oleaut32.NewProc("SysFreeString")
 
@@ -26,6 +27,7 @@ var (
 
 const (
 	coinitApartmentThreaded = 0x2
+	coinitMultithreaded     = 0x0
 	clsctxInprocServer      = 0x1
 	treeScopeDescendants    = 0x4
 
@@ -56,25 +58,44 @@ func (o *comObj) release() {
 }
 
 type uiaClient struct {
-	auto *comObj
-	all  *comObj // true condition
+	auto        *comObj
+	all         *comObj // true condition
+	initialized bool
 }
 
-// newUIA must be called on the GUI thread (it initialises COM in single-threaded mode).
+// newUIA belongs on a locked MTA thread that owns no windows. Explorer queries
+// must never run on the GUI thread, which also handles shell tray callbacks.
 func newUIA() *uiaClient {
-	pCoInitializeEx.Call(0, coinitApartmentThreaded)
-	var auto *comObj
-	hr, _, _ := pCoCreateInstance.Call(uintptr(unsafe.Pointer(&clsidCUIAutomation)), 0, clsctxInprocServer,
-		uintptr(unsafe.Pointer(&iidIUIAutomation)), uintptr(unsafe.Pointer(&auto)))
-	if hr != 0 || auto == nil {
+	hr, _, _ := pCoInitializeEx.Call(0, coinitMultithreaded)
+	if hr != 0 && hr != 1 { // S_OK or S_FALSE
 		return nil
 	}
-	u := &uiaClient{auto: auto}
+	u := &uiaClient{initialized: true}
+	var auto *comObj
+	hr, _, _ = pCoCreateInstance.Call(uintptr(unsafe.Pointer(&clsidCUIAutomation)), 0, clsctxInprocServer,
+		uintptr(unsafe.Pointer(&iidIUIAutomation)), uintptr(unsafe.Pointer(&auto)))
+	u.auto = auto
+	if hr != 0 || auto == nil {
+		u.close()
+		return nil
+	}
 	if auto.call(vtAutoCreateTrueCond, uintptr(unsafe.Pointer(&u.all))) != 0 || u.all == nil {
-		auto.release()
+		u.close()
 		return nil
 	}
 	return u
+}
+
+// close must run on the same locked thread that created the client.
+func (u *uiaClient) close() {
+	if u == nil {
+		return
+	}
+	u.all.release()
+	u.auto.release()
+	if u.initialized {
+		pCoUninitialize.Call()
+	}
 }
 
 func bstrToString(b *uint16) string {

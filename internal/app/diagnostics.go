@@ -17,6 +17,7 @@ func WriteTaskbarLayout(w io.Writer) error {
 	defer runtime.UnlockOSThread()
 	pSetProcessDpiAwarenessContext.Call(DPI_PER_MONITOR_V2)
 	uia := newUIA()
+	defer uia.close()
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	taskbars := findTaskbars(true)
