@@ -39,6 +39,10 @@ jobs:
       - name: Test
         run: go test ./...
 
+      - name: Test PowerShell installer
+        shell: powershell
+        run: .\tests\install.Tests.ps1
+
       - name: Generate icon, manifest and version info
         shell: pwsh
         run: |
@@ -64,7 +68,7 @@ jobs:
           "@ | Out-File -Encoding utf8 notes.md
           $extra = @()
           if ($env:GITHUB_REF_NAME.Contains("-")) { $extra = @("--prerelease") }
-          gh release create "$env:GITHUB_REF_NAME" bin/burnbar.exe bin/burnbar.exe.sha256 `
+          gh release create "$env:GITHUB_REF_NAME" bin/burnbar.exe bin/burnbar.exe.sha256 install.ps1 `
             --repo "$env:GITHUB_REPOSITORY" --verify-tag --title "BurnBar $env:GITHUB_REF_NAME" `
             --generate-notes --notes-file notes.md @extra
 

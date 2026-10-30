@@ -72,8 +72,30 @@ You need Windows 10 or 11 and a signed-in provider:
 Both providers rotate through the meter by default. A missing login affects only that provider. Select
 **Usage providers** from the right-click menu to hide a provider you don't use.
 
-Download `burnbar.exe` from the [releases page](https://github.com/nooblk-98/burnbar/releases),
-put it anywhere (for example `%LOCALAPPDATA%\Programs\BurnBar`), and run it.
+### Install or update with PowerShell
+
+Run this in a regular PowerShell window; administrator access is not needed:
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/nooblk-98/burnbar/main/install.ps1)))
+```
+
+The same command installs or updates the **latest stable release** in
+`%LOCALAPPDATA%\Programs\BurnBar`, verifies its SHA-256 checksum, adds a Start menu
+shortcut, and launches BurnBar. Existing settings and history are kept. A running
+BurnBar instance in your session is closed after the download is verified.
+
+You can [review the installer](install.ps1) before running it. To choose a folder
+or install without launching:
+
+```powershell
+$installer = irm https://raw.githubusercontent.com/nooblk-98/burnbar/main/install.ps1
+& ([scriptblock]::Create($installer)) -InstallDir 'D:\Apps\BurnBar' -NoStart
+```
+
+For a manual install, download `burnbar.exe` from the
+[releases page](https://github.com/nooblk-98/burnbar/releases), put it anywhere,
+and run it.
 
 On its first normal launch, BurnBar enables **Start with Windows** for a new profile.
 You can disable it from the right-click menu. Demo and diagnostic modes do not enable it.

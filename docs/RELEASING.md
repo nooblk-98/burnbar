@@ -13,13 +13,19 @@ git push origin main v0.2.2
 ```
 
 The `build` workflow runs vet and tests, generates the icon, manifest and version
-information, then builds `burnbar.exe`. It uploads the executable and
-`burnbar.exe.sha256` directly to a GitHub release, without using Actions artifact
-storage. A version such as `v0.2.2` creates a normal release; a version with a
+information, then builds `burnbar.exe`. It uploads `burnbar.exe`,
+`burnbar.exe.sha256`, and a copy of `install.ps1` directly to a GitHub release,
+without using Actions artifact storage. A version such as `v0.2.2` creates a normal release; a version with a
 suffix such as `v0.2.2-beta.1` creates a prerelease.
 
 Windows may warn about or block an unsigned executable. Release assets include
 a SHA-256 checksum so downloads can be checked with `Get-FileHash`.
+
+The root `install.ps1` script uses GitHub's latest stable release endpoint and
+requires both asset names above. Keep those names stable so the documented
+PowerShell install/update command continues to work. The bootstrap command reads
+the installer from `main`; it installs release binaries rather than development
+builds. Validate installer changes with `powershell -NoProfile -File tests/install.Tests.ps1`.
 
 ## Optional winget publishing
 

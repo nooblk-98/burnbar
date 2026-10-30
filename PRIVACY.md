@@ -3,6 +3,19 @@
 This document describes BurnBar's own behavior in the current source code.
 Provider CLIs and services have their own settings and policies.
 
+## PowerShell installation
+
+The optional [installer](install.ps1) checks the repository's latest stable
+release using GitHub's API and downloads its executable and checksum from GitHub
+over HTTPS. It sends a `BurnBar-Installer` User-Agent; normal network metadata is
+also visible to GitHub. It does not need a provider login or GitHub token.
+
+It installs into `%LOCALAPPDATA%\Programs\BurnBar` by default, creates a Start
+menu shortcut for the current user, and can close existing BurnBar processes
+in the same Windows session to perform an update. It keeps the existing
+`%APPDATA%\BurnBar` settings and histories. Use `-NoStart` to install without
+launching; in that mode it only closes an instance at the selected install path.
+
 ## Provider authentication and network requests
 
 ### Claude
