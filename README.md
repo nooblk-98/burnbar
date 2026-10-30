@@ -138,3 +138,12 @@ docs/                 screenshots and release guide
 ```
 
 </details>
+
+## Contributing
+
+Contributors are welcome! Bug fixes, documentation improvements, and new AI tool
+integrations are all appreciated. Feel free to open a pull request.
+
+Support for more AI tools is coming soon. To request a specific tool or suggest a
+feature, [open an issue](https://github.com/nooblk-98/burnbar/issues/new) and tell us
+what you would like to see.
