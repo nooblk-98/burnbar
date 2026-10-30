@@ -13,7 +13,7 @@
 **Claude and Codex usage meter for the Windows taskbar.**<br>
 See how fast you're burning through your plan limits without leaving what you're doing.
 
-[Features](#features) • [Installation](#installation) • [How it works](#how-it-works) • [Build from source](#build-from-source)
+[Features](#features) • [Installation](#installation) • [Build from source](#build-from-source)
 
 <img src="docs/images/burnbar-demo.gif" alt="BurnBar on Windows, showing the rotating taskbar meter and Claude and Codex usage details" width="848">
 <br>
@@ -89,29 +89,6 @@ put it anywhere (for example `%LOCALAPPDATA%\Programs\BurnBar`), and run it.
 Turning protection back on may block BurnBar again. Running it once does not create
 an exception for the app. See [Microsoft's Smart App Control FAQ](https://support.microsoft.com/en-us/windows/security/threat-malware-protection/smart-app-control-frequently-asked-questions)
 for current requirements and limitations.
-
-## How it works
-
-**Claude:** BurnBar reads the OAuth token that Claude Code saves in `%USERPROFILE%\.claude\.credentials.json`
-(or `%CLAUDE_CONFIG_DIR%`) and calls `https://api.anthropic.com/api/oauth/usage`, the same endpoint
-Claude Code's `/usage` command uses. To place itself, it reads the taskbar button positions through
-Windows UI Automation and picks the free gap closest to the notification area.
-
-**Codex:** BurnBar starts a short-lived local `codex app-server` process and uses the documented
-[`account/read` and `account/rateLimits/read`](https://developers.openai.com/codex/app-server/)
-requests. It uses Codex's existing login and honors `CODEX_HOME`. It does not start conversations
-or model turns. If automatic detection fails, set `BURNBAR_CODEX_PATH` to the full path to the
-native `codex.exe` before starting BurnBar. The CLI must support the account app-server methods.
-
-**Privacy.** Claude's token is sent only to `api.anthropic.com`; BurnBar never modifies or refreshes
-it. Codex authentication and network requests are handled by the installed Codex CLI using its
-configured OpenAI services. BurnBar does not read or copy Codex credentials. BurnBar has no telemetry.
-Settings, alert state and separate histories stay on your PC in `%APPDATA%\BurnBar\`;
-Claude's existing `history.jsonl` is preserved and Codex uses `history-codex.jsonl`.
-
-> [!IMPORTANT]
-> Claude's usage endpoint is undocumented and may change or stop working at any time. If the meter shows
-> a login error, run `claude` once so Claude Code refreshes its token.
 
 ## Build from source
 
