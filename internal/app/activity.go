@@ -6,8 +6,9 @@ import (
 	"github.com/nooblk-98/burnbar/internal/usage"
 )
 
-func (state *fetchState) beginFetch(now time.Time, manual bool) bool {
-	if !manual && now.Before(state.cooldownUntil) {
+// Manual refresh must not bypass a provider rate-limit cooldown.
+func (state *fetchState) beginFetch(now time.Time, _ bool) bool {
+	if now.Before(state.cooldownUntil) {
 		return false
 	}
 	if !state.fetching.CompareAndSwap(false, true) {
