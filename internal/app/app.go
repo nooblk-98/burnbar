@@ -357,7 +357,7 @@ func (a *app) checkAlerts(u usage.Usage) {
 		if seen && prev.ResetsAt == cycle {
 			cur.Level = prev.Level
 		}
-		if seen && prev.ResetsAt != cycle && prev.Level > 0 && w.Percent < prev.Percent && a.cfg.Alerts && !a.automaticSuppressed() {
+		if seen && prev.ResetsAt != cycle && prev.Level > 0 && w.Percent < prev.Percent && a.cfg.Alerts && !a.nativeSuppressed() {
 			a.notify(u.Name()+" "+w.Label+" limit has reset", fmt.Sprintf("You're back to %.0f%% used.", w.Percent), false)
 		}
 		level := 0
@@ -367,7 +367,7 @@ func (a *app) checkAlerts(u usage.Usage) {
 			level = 80
 		}
 		if level > cur.Level {
-			if a.cfg.Alerts && !a.automaticSuppressed() {
+			if a.cfg.Alerts && !a.nativeSuppressed() {
 				a.notify(fmt.Sprintf("%s %s at %.0f%%", u.Name(), w.Label, w.Percent), render.ResetText(w.ResetsAt), true)
 			}
 			cur.Level = level
@@ -557,18 +557,21 @@ func (a *app) checkMilestones(u usage.Usage) {
 	if changed && !a.demo {
 		a.cfg.Save()
 	}
-	if len(events) == 0 || !a.cfg.MilestonePopups || a.cfg.AlwaysShowPopup || a.automaticSuppressed() {
-		return
-	}
-	if a.settings != nil || a.accessible != nil {
+	if len(events) == 0 || !a.cfg.MilestonePopups || a.cfg.AlwaysShowPopup {
 		return
 	}
 	if a.cfg.NativeNotices {
+		if a.nativeSuppressed() {
+			return
+		}
 		var lines []string
 		for _, e := range events {
 			lines = append(lines, fmt.Sprintf("%s %s: %.0f%% used (%d%% crossed). %s", e.Provider.Name(), e.Label, e.Percent, e.Level, render.ResetText(e.ResetsAt)))
 		}
 		a.notify("BurnBar usage milestone", strings.Join(lines, "\n"), false)
+		return
+	}
+	if a.automaticSuppressed() || a.settings != nil || a.accessible != nil {
 		return
 	}
 	// Never replace the view the user is inspecting.

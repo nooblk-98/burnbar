@@ -35,11 +35,20 @@ Quiet controls suppress usage popups, usage balloons, update notifications and
 the optional pinned overview. Manual inspection and settings remain available.
 Suppressed crossings are consumed, never queued for a burst afterwards.
 
-**Respect Windows busy / quiet state and Focus sessions** is on by default.
-Custom cards appear only when `SHQueryUserNotificationState` explicitly reports
-`QUNS_ACCEPTS_NOTIFICATIONS`, no fullscreen app is detected, and no supported
-Windows Focus session is active. Focus detection uses the read-only
+**Respect Windows quiet state and Focus sessions** is on by default and applies
+to BurnBar's custom cards. Cards are suppressed when no fullscreen app is
+detected but `SHQueryUserNotificationState` reports a quiet state (not present,
+for example locked or screen saver; exclusive D3D; presentation mode; quiet time;
+or an immersive fullscreen app), or a supported Windows Focus session is active.
+`QUNS_BUSY` alone does not suppress cards, because Windows also reports it outside
+fullscreen; actual fullscreen windows are detected separately. If the state query
+fails, cards are not suppressed. Focus detection uses the read-only
 `Windows.UI.Shell.FocusSessionManager` API, with safe fallback on older Windows.
+
+Windows notifications (the 80%/95%/reset alerts, update notices and the
+**Windows notification** milestone style) are sent with Windows' respect-quiet-time
+flag, so Windows applies its own quiet time, Focus and Do Not Disturb rules to
+them. BurnBar suppresses them only for snooze and scheduled quiet hours.
 
 **Important Windows limitation:** the shell API does not reliably expose every
 standalone Do Not Disturb/Focus Assist state on every Windows version. For

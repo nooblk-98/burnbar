@@ -83,7 +83,7 @@ func (a *app) showSettings() {
 	w.edit(settingQuietStart, alerts.Clock(c.QuietStart), 410, 290, 65, 1)
 	w.label(2014, "&To:", 490, 294, 30, 1)
 	w.edit(settingQuietEnd, alerts.Clock(c.QuietEnd), 520, 290, 65, 1)
-	w.check(settingWindowsQuiet, "Respect Windows &busy / quiet state and Focus sessions", c.RespectWindowsQuiet, 20, 328, 565, 1)
+	w.check(settingWindowsQuiet, "Respect Windows &quiet state and Focus sessions for cards", c.RespectWindowsQuiet, 20, 328, 565, 1)
 	w.label(2015, "Suppressed milestones are skipped, not queued. Manual views still work.", 20, 367, 565, 1)
 
 	w.label(2020, "Close automatic and manual views after (&seconds):", 20, 65, 410, 2)

@@ -2,6 +2,7 @@ package app
 
 import (
 	"github.com/nooblk-98/burnbar/internal/alerts"
+	"github.com/nooblk-98/burnbar/internal/layout"
 	"golang.org/x/sys/windows"
 	"syscall"
 	"time"
@@ -77,15 +78,29 @@ func (f *focusReader) close() {
 		f.initialized = false
 	}
 }
+
+// userQuiet reports BurnBar's own quiet controls: snooze and scheduled quiet hours.
+func (a *app) userQuiet() bool {
+	return alerts.Quiet(time.Now(), a.cfg.SnoozeUntil, a.cfg.QuietHours, a.cfg.QuietStart, a.cfg.QuietEnd)
+}
+
+// nativeSuppressed gates Windows balloon/toast notices. They are sent with
+// NIIF_RESPECT_QUIET_TIME, so Windows applies its own quiet time, Focus and
+// Do Not Disturb rules; second-guessing them from shell state here would drop
+// 80%/95% alerts that Windows would otherwise deliver or file in Action Center.
+func (a *app) nativeSuppressed() bool { return a.userQuiet() }
+
+// automaticSuppressed gates BurnBar's own custom cards, which Windows does not filter.
 func (a *app) automaticSuppressed() bool {
-	if alerts.Quiet(time.Now(), a.cfg.SnoozeUntil, a.cfg.QuietHours, a.cfg.QuietStart, a.cfg.QuietEnd) {
+	if a.userQuiet() {
 		return true
 	}
 	state := foregroundVisibility()
 	if state.Hide {
 		return true
 	}
-	// QUNS_ACCEPTS_NOTIFICATIONS (5) is the shell's explicit permission to show
-	// custom notification UI. Fail closed for unknown/busy/locked/presentation.
-	return a.cfg.RespectWindowsQuiet && (state.Notification != 5 || a.focus.active())
+	// Only states that positively indicate quiet suppress cards. QUNS_BUSY and
+	// unknown/failed queries do not: busy is reported outside fullscreen too,
+	// and real fullscreen is already covered by state.Hide above.
+	return a.cfg.RespectWindowsQuiet && (layout.ShellQuiet(state.Notification) || a.focus.active())
 }
