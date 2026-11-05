@@ -102,11 +102,12 @@ static NSDictionary *readState(void) {
 - (void)save:(id)sender {
  NSMutableDictionary *data=[NSMutableDictionary dictionary];
  for(NSString *key in self.fields){NSControl *control=self.fields[key];if([control isKindOfClass:NSButton.class])data[key]=@([(NSButton *)control state]==NSControlStateValueOn);else if([key isEqualToString:@"Seconds"]||[key isEqualToString:@"Interval"]){NSString *text=control.stringValue;NSScanner *scan=[NSScanner scannerWithString:text];NSInteger n;if(![scan scanInteger:&n]||!scan.isAtEnd){[self error:@"Enter whole numbers for seconds and refresh minutes"];return;}data[key]=@(n);}else data[key]=control.stringValue;}
- NSData *json=[NSJSONSerialization dataWithJSONObject:data options:0 error:nil];NSString *raw=[[NSString alloc]initWithData:json encoding:NSUTF8StringEncoding];char *err=bb_save((char *)raw.UTF8String);
+ NSData *json=[NSJSONSerialization dataWithJSONObject:data options:0 error:nil];NSString *raw=[[NSString alloc]initWithData:json encoding:NSUTF8StringEncoding];if(self.smoke){fprintf(stderr,"Synthetic preferences: %s\n",raw.UTF8String);fflush(stderr);}
+ char *err=bb_save((char *)raw.UTF8String);
  if(err){NSString *text=[NSString stringWithUTF8String:err];free(err);[self error:text];return;}
  [self.settings close];[self tick:nil];
 }
-- (void)error:(NSString *)text {NSAlert *alert=[[NSAlert alloc]init];alert.messageText=@"Could not save preferences";alert.informativeText=text;[alert runModal];}
+- (void)error:(NSString *)text {if(self.smoke){fprintf(stderr,"Preferences validation failed: %s\n",text.UTF8String);fflush(stderr);exit(1);}NSAlert *alert=[[NSAlert alloc]init];alert.messageText=@"Could not save preferences";alert.informativeText=text;[alert runModal];}
 - (void)cancel:(id)sender {[self.settings close];}
 - (void)snapshot:(NSView *)view name:(NSString *)name {
  [view layoutSubtreeIfNeeded];NSBitmapImageRep *rep=[view bitmapImageRepForCachingDisplayInRect:view.bounds];
