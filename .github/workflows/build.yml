@@ -127,7 +127,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Development install smoke check failed" }
 
   npm:
-    # Enable only after the first npm publish and trusted publisher setup.
+    # Enable after configuring NPM_TOKEN or an npm trusted publisher.
     # Dev commits use the development dist-tag; stable version tags use latest.
     if: >-
       vars.NPM_PUBLISH_ENABLED == 'true' && github.event_name == 'push' &&
@@ -148,8 +148,9 @@ jobs:
         env:
           PACKAGE_VERSION: ${{ needs.build.outputs.version }}
         run: npm version "$PACKAGE_VERSION" --no-git-tag-version --ignore-scripts
-      - name: Publish installer via npm trusted publishing
+      - name: Publish installer to npm
         env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           DIST_TAG: ${{ github.ref == 'refs/heads/development' && 'development' || 'latest' }}
         run: npm publish --access public --provenance --tag "$DIST_TAG"
 

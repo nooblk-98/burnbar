@@ -73,7 +73,16 @@ function main(args = process.argv.slice(2), runtime = { platform: process.platfo
     if (options.version) { console.log(pkg.version); return 0; }
     if (runtime.platform !== 'win32') throw new Error('BurnBar requires Windows. No files were installed.');
     const { executable, args: psArgs } = invocation(options, runtime.env);
-    const result = runtime.spawnSync(executable, psArgs, { stdio: 'inherit', shell: false, windowsHide: true });
+    // PowerShell 7 can pass its incompatible module search path to Windows
+    // PowerShell 5.1 (e.g. when npx is launched from pwsh). Let 5.1 construct
+    // its own module path so standard cmdlets such as Get-FileHash resolve.
+    const childEnv = { ...runtime.env };
+    for (const key of Object.keys(childEnv)) {
+      if (key.toLowerCase() === 'psmodulepath') delete childEnv[key];
+    }
+    const result = runtime.spawnSync(executable, psArgs, {
+      stdio: 'inherit', shell: false, windowsHide: true, env: childEnv,
+    });
     if (result.error) throw new Error(`Could not run Windows PowerShell: ${result.error.message}`);
     return result.status ?? 1;
   } catch (error) {

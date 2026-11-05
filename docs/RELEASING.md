@@ -56,44 +56,36 @@ to overwrite it; tag the next version for a new release. Development reruns use 
 new run-attempt suffix. The installer package chooses the latest GitHub release
 in its channel, rather than pinning its own package version to a binary.
 
-### One-time npm setup (maintainer)
+### npm authentication setup (maintainer)
 
-The package name is `burnbar`. Availability is not a reservation; if somebody else
-claims it, choose a controlled scoped name and update the manifest and commands.
-No npm credentials are committed or required for GitHub-backed npx installs.
+The package name is `burnbar`, owned by npm account `lahiru98s` after its first
+successful publication. Repository secret `NPM_TOKEN` supplies a publish-capable
+npm token; repository Actions variable `NPM_PUBLISH_ENABLED=true` enables the job.
+The first successful development push can create the npm package; a separate
+manual bootstrap publication is not required. No credentials are committed or
+included in the npm payload. To replace the token, use GitHub's repository secret
+UI or `gh secret set NPM_TOKEN` with a protected input, then retain the enabled
+variable. The token must permit package creation/publication and satisfy npm's
+2FA policy for noninteractive CI publishing.
 
-1. Sign in to the npm account that should own `burnbar` using `npm login`.
-2. From a reviewed checkout, publish the first installer package under a version
-   not already on npm. For example, to bootstrap development without creating a
-   misleading stable `latest` tag:
+As an alternative after the package exists, configure npm trusted publishing to
+avoid a long-lived publish token:
 
-   ```powershell
-   npm version 0.0.0-dev.0 --no-git-tag-version --ignore-scripts
-   npm publish --access public --tag development
-   ```
-
-   This local version edit is for publication only; do not commit the generated
-   version change. The workflow assigns versions automatically.
-3. On npmjs.com, open **burnbar → Settings → Trusted publishing**. Configure GitHub
+1. On npmjs.com, open **burnbar → Settings → Trusted publishing**. Configure GitHub
    owner `nooblk-98`, repository `burnbar`, workflow `build.yml`, no environment.
-   Allow direct `npm publish`. The job requests `id-token: write` and publishes
-   using OIDC and provenance, without a stored npm token. See
+   Allow direct `npm publish`.
+2. Remove the repository's `NPM_TOKEN` secret after validating the OIDC setup. The
+   job has `id-token: write` and can use OIDC when no token is configured. See
    [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/).
-4. Set GitHub repository Actions variable `NPM_PUBLISH_ENABLED` to `true`:
 
-   ```powershell
-   gh variable set NPM_PUBLISH_ENABLED --repo nooblk-98/burnbar --body true
-   ```
+If publishing is intentionally disabled, set `NPM_PUBLISH_ENABLED=false`.
+GitHub builds and GitHub-backed npx installation work independently.
 
-5. Push a development commit to prove `burnbar@development`. Merge this workflow
-   into `main`, then create the next stable version tag to publish `burnbar@latest`.
-   Until the first stable npm publication, use the GitHub-backed stable command.
-
-The publish job stays disabled until this setup is complete; it does not silently
-pretend npm publication succeeded. GitHub builds and GitHub-backed npx installation
-work independently. For a new tag-based stable release, ensure this workflow and
-the package files are on the tagged main commit. Stable tags on commits outside
-main are rejected before publishing a stable binary or package.
+To establish the stable npm channel, merge the workflow into `main`, then create
+the next stable version tag. Until that first stable npm publication, use
+`npx --yes burnbar@development install --channel stable` or the GitHub-backed
+stable command. Stable tags on commits outside main are rejected before publishing
+a stable binary or package.
 
 ### Installer verification
 

@@ -79,7 +79,8 @@ Both providers rotate through the meter by default. A missing login affects only
 Requires Windows, [Node.js 22+](https://nodejs.org/) (includes npm/npx), and
 Windows PowerShell 5.1. BurnBar itself does not need Node.js after installation.
 
-Once the maintainer enables npm publishing, install or update using:
+Install or update using these npm channels (the stable `latest` tag is created
+by the first stable release after this workflow reaches main):
 
 ```powershell
 # Latest stable release (same command for first install and updates)
@@ -98,7 +99,14 @@ The installer package version is not a pin to a particular executable version:
 each invocation checks GitHub for the latest published build of that channel.
 Updates are explicit, not an always-running automatic updater.
 
-**Before the first npm publish**, use the GitHub-backed package instead (also
+**Before the first stable npm publish**, use the development installer to install
+the stable executable:
+
+```powershell
+npx --yes burnbar@development install --channel stable
+```
+
+Alternatively, use the GitHub-backed package (also
 requires Git). These commands do not require an npm account or npm publication:
 
 ```powershell
