@@ -107,7 +107,6 @@ func writeSnapshots(dir string, demo bool, mode string) error {
 		}
 		if len(readings) > 0 {
 			imgs["widget-narrow-"+name+".png"] = render.ProviderWidgetSized(1.25, readings[0], th, false, render.MinimumWidgetWidth(1.25))
-			imgs["widget-floating-"+name+".png"] = render.FloatingWidget(render.ProviderWidget(1.25, readings[0], th, false), th, 1.25)
 		}
 		if len(readings) > 1 {
 			from := render.ProviderWidget(1.25, readings[0], th, false)

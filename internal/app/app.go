@@ -71,7 +71,6 @@ type placement struct {
 	scale      float64
 	light      bool
 	visible    bool
-	floating   bool
 }
 
 // overlay is one meter window, attached to one taskbar.
@@ -81,6 +80,9 @@ type overlay struct {
 	last  placement
 	hover bool
 
+	slotBounds       RECT
+	slotReadAfter    time.Time
+	slotMargin       int
 	slotX            int
 	slotW            int
 	slotActualW      int
@@ -436,18 +438,31 @@ func (a *app) overlayByHwnd(hwnd uintptr) *overlay {
 // slot returns the overlay's x position, re-reading the taskbar layout every few seconds
 // or right after windows open and close.
 func (a *app) slot(ov *overlay, tb taskbar, w int, scale float64) (x, width int, fits, ready bool) {
+	margin := int(6 * scale)
+	if ov.slotBounds != tb.rect || ov.slotMargin != margin {
+		// A cached x and its UIA reading belong to the geometry/DPI measured.
+		if ov.slotBounds != (RECT{}) {
+			ov.slotReadAfter = time.Now()
+		}
+		ov.slotAt = time.Time{}
+		ov.slotOK = false
+		ov.slotBounds, ov.slotMargin = tb.rect, margin
+	}
 	if !a.slotsDirty && w == ov.slotW && time.Since(ov.slotAt) < slotTTL {
 		return ov.slotX, ov.slotActualW, ov.slotOK, true
 	}
-	margin := int(6 * scale)
 	maxAge := slotTTL
 	if a.slotsDirty {
 		maxAge = relayoutEvery
 	}
-	a.uia.request(tb.hwnd, maxAge)
 	reading, available := a.uia.snapshot(tb.hwnd)
+	geometryStale := reading.at.Before(ov.slotReadAfter)
+	if geometryStale {
+		maxAge = 0 // remeasure immediately after a taskbar move or DPI change
+	}
+	a.uia.request(tb.hwnd, maxAge)
 	occupied, trayLeft, hasTray := layout.AnalyzeTaskbar(reading.items, tb.rect)
-	if !available || !reading.ok || time.Since(reading.at) > slotTTL+2*time.Second || (!hasTray && len(occupied) == 0) {
+	if !available || !reading.ok || geometryStale || time.Since(reading.at) > slotTTL+2*time.Second || (!hasTray && len(occupied) == 0) {
 		// Explorer can temporarily stop answering automation calls while Search
 		// or a flyout opens. Keep the last safe slot briefly and retry next tick.
 		a.layoutMoved = true
@@ -470,12 +485,7 @@ func (a *app) slot(ov *overlay, tb taskbar, w int, scale float64) (x, width int,
 	}
 	x, width, fits = layout.PickSizedSlot(occupied, int(tb.rect.Left), trayLeft, w, render.MinimumWidgetWidth(scale), margin, a.cfg.Position)
 	if !fits {
-		width = w
-		x = ov.slotX
-		if ov.slotAt.IsZero() {
-			x = trayLeft - margin - w
-		}
-		x = min(max(x, int(tb.rect.Left)+margin), int(tb.rect.Right)-margin-w)
+		width = w // no window is displayed; retain the preferred render width
 	}
 	ov.slotX, ov.slotW, ov.slotAt, ov.slotOK = x, w, reading.at, fits
 	ov.slotActualW = width
@@ -499,11 +509,8 @@ func (a *app) place(force bool) {
 			w, h := render.GroupWidgetSize(scale, len(usage.Providers(a.cfg.Providers)))
 			x, actualW, fits, ready := a.slot(ov, tb, w, scale)
 			w = actualW
-			y := int(tb.rect.Top) + (int(tb.rect.Bottom-tb.rect.Top)-h)/2
-			if !fits {
-				y = int(tb.rect.Top) - h - int(4*scale)
-			}
-			p = placement{x: x, y: y, w: w, h: h, scale: scale, light: light, visible: ready, floating: ready && !fits}
+			bounds, contained := layout.MeterRect(tb.rect, x, w, h)
+			p = placement{x: x, y: int(bounds.Top), w: w, h: h, scale: scale, light: light, visible: ready && fits && contained}
 		}
 		a.apply(ov, p, force)
 	}
@@ -522,14 +529,12 @@ func (a *app) apply(ov *overlay, p placement, force bool) {
 		if ov.last.visible {
 			pShowWindow.Call(ov.hwnd, SW_HIDE)
 		}
+		ov.hover = false // hidden windows may never receive WM_MOUSELEAVE
 		ov.last = p
 		return
 	}
 	if force || p != ov.last {
 		img := a.widget(ov, p)
-		if p.floating {
-			img = render.FloatingWidget(img, render.NewTheme(p.light), p.scale)
-		}
 		a.paint(ov.hwnd, img, p.x, p.y)
 	}
 	if !ov.last.visible {
@@ -602,11 +607,6 @@ func (a *app) renderPopup() {
 		panels = append(panels, render.Panel{Usage: u, History: a.hist[u.Provider].Since(time.Now().Add(-7 * 24 * time.Hour))})
 	}
 	work := workArea(a.popupTB)
-	for _, ov := range a.overlays {
-		if ov.tb == a.popupTB && ov.last.visible && ov.last.floating {
-			work.Bottom = min(work.Bottom, int32(ov.last.y))
-		}
-	}
 	// Two columns on roomy screens; a compact stacked summary on small displays.
 	img := render.GroupPopup(scale, panels, render.NewTheme(systemUsesLightTheme()), int(work.Right-work.Left)-24, int(work.Bottom-work.Top)-24)
 	w, h := img.Rect.Dx(), img.Rect.Dy()

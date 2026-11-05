@@ -75,9 +75,6 @@ func (a *app) animateFlip() {
 	for _, ov := range a.overlays {
 		if ov.last.visible {
 			img := a.widget(ov, ov.last)
-			if ov.last.floating {
-				img = render.FloatingWidget(img, render.NewTheme(ov.last.light), ov.last.scale)
-			}
 			a.paint(ov.hwnd, img, ov.last.x, ov.last.y)
 		}
 	}

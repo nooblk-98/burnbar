@@ -102,16 +102,6 @@ func ProviderWidgetSized(scale float64, u usage.Usage, th Theme, hover bool, wid
 	return img
 }
 
-// FloatingWidget gives the fallback above a crowded taskbar an opaque surface.
-func FloatingWidget(meter *image.RGBA, th Theme, scale float64) *image.RGBA {
-	img := image.NewRGBA(meter.Rect)
-	w, h := float64(img.Rect.Dx()), float64(img.Rect.Dy())
-	fillRoundRect(img, 0, 0, w, h, 4*scale, th.border)
-	fillRoundRect(img, 1, 1, w-1, h-1, 4*scale-1, th.bg)
-	draw.Draw(img, img.Rect, meter, image.Point{}, draw.Over)
-	return img
-}
-
 // GroupPopup displays independent provider panels. If a full view cannot fit the
 // monitor, summaries retain the main limits and errors while omitting charts.
 func GroupPopup(scale float64, panels []Panel, th Theme, maxW, maxH int) *image.RGBA {
