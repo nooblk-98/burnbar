@@ -101,7 +101,7 @@ static NSDictionary *readState(void) {
 - (NSString *)clock:(NSNumber *)n {return [NSString stringWithFormat:@"%02ld:%02ld",(long)n.integerValue/60,(long)n.integerValue%60];}
 - (void)save:(id)sender {
  NSMutableDictionary *data=[NSMutableDictionary dictionary];
- for(NSString *key in self.fields){NSControl *control=self.fields[key];if([control isKindOfClass:NSButton.class])data[key]=@([(NSButton *)control state]==NSControlStateValueOn);else if([key isEqualToString:@"Seconds"]||[key isEqualToString:@"Interval"]){NSString *text=control.stringValue;NSScanner *scan=[NSScanner scannerWithString:text];NSInteger n;if(![scan scanInteger:&n]||!scan.isAtEnd){[self error:@"Enter whole numbers for seconds and refresh minutes"];return;}data[key]=@(n);}else data[key]=control.stringValue;}
+ for(NSString *key in self.fields){NSControl *control=self.fields[key];if([control isKindOfClass:NSButton.class])data[key]=[NSNumber numberWithBool:([(NSButton *)control state]==NSControlStateValueOn)];else if([key isEqualToString:@"Seconds"]||[key isEqualToString:@"Interval"]){NSString *text=control.stringValue;NSScanner *scan=[NSScanner scannerWithString:text];NSInteger n;if(![scan scanInteger:&n]||!scan.isAtEnd){[self error:@"Enter whole numbers for seconds and refresh minutes"];return;}data[key]=@(n);}else data[key]=control.stringValue;}
  NSData *json=[NSJSONSerialization dataWithJSONObject:data options:0 error:nil];NSString *raw=[[NSString alloc]initWithData:json encoding:NSUTF8StringEncoding];if(self.smoke){fprintf(stderr,"Synthetic preferences: %s\n",raw.UTF8String);fflush(stderr);}
  char *err=bb_save((char *)raw.UTF8String);
  if(err){NSString *text=[NSString stringWithUTF8String:err];free(err);[self error:text];return;}
