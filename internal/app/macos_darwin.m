@@ -16,7 +16,7 @@ extern char *bb_save(char *);
 @property NSMutableDictionary<NSString *, NSControl *> *fields;
 @property NSDictionary *state;
 @property NSMenu *menu;
-@property NSDate *deadline;
+@property NSTimeInterval deadline;
 @property NSString *automaticNotice;
 @property BOOL smoke;
 @end
@@ -64,22 +64,22 @@ static NSDictionary *readState(void) {
  // Only rebuild noninteractive meter views, keeping text selection and controls stable.
  if(self.popover.shown||self.smoke){for(NSView *v in self.meters.arrangedSubviews){[self.meters removeArrangedSubview:v];[v removeFromSuperview];}
   if(!self.automaticNotice)for(NSDictionary *m in self.state[@"meters"]){[self.meters addArrangedSubview:label([NSString stringWithFormat:@"%@: %.0f%%",m[@"label"],[m[@"percent"] doubleValue]])];NSProgressIndicator *bar=[[NSProgressIndicator alloc]initWithFrame:NSMakeRect(0,0,330,8)];bar.indeterminate=NO;bar.minValue=0;bar.maxValue=100;bar.doubleValue=[m[@"percent"]doubleValue];[bar.widthAnchor constraintEqualToConstant:330].active=YES;[bar.heightAnchor constraintEqualToConstant:8].active=YES;[self.meters addArrangedSubview:bar];}}
- if(self.deadline&&[self.deadline timeIntervalSinceNow]<=0){if(self.smoke){fprintf(stderr,"Expiring native popover\n");fflush(stderr);}[self close:nil];}
+ if(self.deadline&&NSProcessInfo.processInfo.systemUptime>=self.deadline){if(self.smoke){fprintf(stderr,"Expiring native popover\n");fflush(stderr);}[self close:nil];}
  NSString *notice=self.state[@"notice"];if(notice.length&&!self.popover.shown&&!self.settings.visible){self.automaticNotice=notice;[self show:NO];}
 }
 - (void)show:(BOOL)manual {
  if(manual)self.automaticNotice=nil;
  self.summary.string=self.automaticNotice ?: self.state[@"summary"] ?: @"Loading…";
- self.deadline=[NSDate dateWithTimeIntervalSinceNow:[self.state[@"seconds"] doubleValue]];
+ self.deadline=NSProcessInfo.processInfo.systemUptime+[self.state[@"seconds"] doubleValue];
  [self.popover showRelativeToRect:self.status.button.bounds ofView:self.status.button preferredEdge:NSRectEdgeMinY];
  if(manual)[NSApp activateIgnoringOtherApps:YES];
  [self tick:nil];
 }
 - (void)clicked:(id)sender {if(NSApp.currentEvent.type==NSEventTypeRightMouseUp){[NSMenu popUpContextMenu:self.menu withEvent:NSApp.currentEvent forView:self.status.button];}else if(self.popover.shown){[self close:nil];}else{[self show:YES];}}
-- (void)popoverDidClose:(NSNotification *)notification {self.deadline=nil;self.automaticNotice=nil;}
-- (void)close:(id)sender {[self.popover close];self.deadline=nil;self.automaticNotice=nil;}
+- (void)popoverDidClose:(NSNotification *)notification {self.deadline=0;self.automaticNotice=nil;}
+- (void)close:(id)sender {[self.popover close];self.deadline=0;self.automaticNotice=nil;}
 - (void)authorize:(id)sender {bb_action(5);[self show:YES];}
-- (void)refresh:(id)sender {bb_action(1);if(self.popover.shown)self.deadline=[NSDate dateWithTimeIntervalSinceNow:[self.state[@"seconds"]doubleValue]];[self tick:nil];}
+- (void)refresh:(id)sender {bb_action(1);if(self.popover.shown)self.deadline=NSProcessInfo.processInfo.systemUptime+[self.state[@"seconds"]doubleValue];[self tick:nil];}
 - (void)snooze:(id)sender {bb_action(2);[self close:nil];}
 - (void)resume:(id)sender {bb_action(3);}
 - (void)updates:(id)sender {bb_action(4);[self preferences:nil];}
