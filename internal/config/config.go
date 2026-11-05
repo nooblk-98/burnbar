@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"github.com/nooblk-98/burnbar/internal/alerts"
 	"github.com/nooblk-98/burnbar/internal/usage"
@@ -48,7 +49,13 @@ type AlertState struct {
 
 func Default() Config {
 	startup := true
-	return Config{Providers: "both", PopupSeconds: alerts.DefaultPopupSeconds, PopupBehaviorVersion: 1, MilestoneState: alerts.Tracker{}, MilestonePopups: true, AlwaysShowPopup: false, IntervalMinutes: 3, Alerts: true, PrimaryThresholds: alerts.DefaultThresholds(), SecondaryThresholds: alerts.DefaultThresholds(), QuietStart: 22 * 60, QuietEnd: 8 * 60, RespectWindowsQuiet: true, CompactNotices: true, ShowForecast: true, Theme: "system", TextScale: 100, CheckUpdates: true, StartWithWindows: &startup}
+	c := Config{Providers: "both", PopupSeconds: alerts.DefaultPopupSeconds, PopupBehaviorVersion: 1, MilestoneState: alerts.Tracker{}, MilestonePopups: true, AlwaysShowPopup: false, IntervalMinutes: 3, Alerts: true, PrimaryThresholds: alerts.DefaultThresholds(), SecondaryThresholds: alerts.DefaultThresholds(), QuietStart: 22 * 60, QuietEnd: 8 * 60, RespectWindowsQuiet: true, CompactNotices: true, ShowForecast: true, Theme: "system", TextScale: 100, CheckUpdates: true, StartWithWindows: &startup}
+	if runtime.GOOS == "darwin" {
+		off := false
+		c.StartWithWindows = &off
+		c.MilestonePopups = false
+	}
+	return c
 }
 
 // Dir is the folder holding settings and history; it is created if missing.

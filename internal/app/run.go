@@ -1,3 +1,5 @@
+//go:build windows
+
 // Package app is the Windows side of the meter: tray icon, popup and timers.
 package app
 

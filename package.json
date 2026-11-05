@@ -1,7 +1,7 @@
 {
   "name": "burnbar",
   "version": "0.0.0",
-  "description": "Install or update the BurnBar Windows tray usage monitor",
+  "description": "Install or update the BurnBar Windows and macOS usage monitor",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -16,7 +16,8 @@
   },
   "files": [
     "npm/bin/burnbar.cjs",
-    "npm/windows/install.ps1"
+    "npm/windows/install.ps1",
+    "npm/macos/install.cjs"
   ],
   "engines": {
     "node": ">=22"
