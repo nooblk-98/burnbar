@@ -128,3 +128,21 @@ while deleting its data can cause the files to be created again.
 For implementation details, see [usage access](internal/usage),
 [activity watching](internal/app/watch.go), [settings](internal/config/config.go),
 and [history storage](internal/history/history.go).
+
+## macOS preview
+
+The [macOS port](docs/MACOS.md) stores settings/history under
+`~/Library/Application Support/BurnBar` (or APPDATA when explicitly set for tests).
+It reads the default Claude Code Keychain item via Security.framework without
+background authorization prompts; only the menu's explicit authorization action
+allows a prompt. Credentials stay in process memory, are never logged or persisted
+by BurnBar, and are used only for the existing Anthropic usage endpoint. An explicit
+custom Claude directory never falls back to another account's default Keychain.
+Codex continues to use the local CLI account RPCs.
+
+The preview does not install a login item, read macOS Focus settings, take desktop
+screenshots, collect telemetry or send usage data to update servers. The macOS npx
+helper downloads GitHub release assets/checksums, installs to the selected app
+folder and optionally opens the app. It neither changes Keychain items nor removes
+quarantine/system security settings. The app's search PATH additions apply only to
+its process, never to shell configuration. Full beta limitations are in the guide.

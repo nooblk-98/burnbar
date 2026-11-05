@@ -92,7 +92,14 @@ updating; that explicit choice is retained. See [popup behavior](docs/POPUP_BEHA
 <sub>Rendered demo previews: a milestone notice that closes automatically. Click to inspect details.</sub>
 </div>
 
-## Installation
+## macOS preview
+
+An experimental native menu-bar port is available in source, with Intel and Apple
+Silicon builds. See the [macOS guide](docs/MACOS.md) for build/install instructions,
+authentication, automated checks and feature gaps. macOS requires a release that
+actually includes macOS assets; older Windows-only releases cannot install it.
+
+## Installation (Windows)
 
 You need Windows 10 or 11 and a signed-in provider:
 

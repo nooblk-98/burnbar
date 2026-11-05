@@ -41,11 +41,19 @@ async function install(options, runtime = { arch: process.arch }) {
   if (!asset || !checksum) throw new Error(`Release ${release.tag_name} has no macOS preview yet. No files were installed.`);
   const parent = options.installDir || path.join(os.homedir(), 'Applications');
   const target = path.join(parent, 'BurnBar.app');
+  const bundleID = 'io.github.nooblk-98.burnbar';
+  async function validateBundle(bundle) {
+    const plist = path.join(bundle, 'Contents/Info.plist');
+    const id = run('/usr/bin/plutil', ['-extract', 'CFBundleIdentifier', 'raw', '-o', '-', plist]).stdout.trim();
+    const executable = run('/usr/bin/plutil', ['-extract', 'CFBundleExecutable', 'raw', '-o', '-', plist]).stdout.trim();
+    if (id !== bundleID || executable !== 'burnbar') throw new Error('Refusing to replace an unrecognized application bundle');
+  }
   console.log(`${release.tag_name}: ${name} → ${target}`);
   if (options.dryRun) return;
   // Never replace an app while it might still be running. No process-name kills.
   const pids = spawnSync('/usr/bin/pgrep', ['-f', path.join(target, 'Contents/MacOS/burnbar')], { encoding: 'utf8', shell: false });
   if (pids.status === 0) throw new Error('Quit BurnBar before updating, then run this command again.');
+  try { await fs.lstat(target); await validateBundle(target); } catch (e) { if (e.code !== 'ENOENT') throw e; }
   await fs.mkdir(parent, { recursive: true });
   const stage = await fs.mkdtemp(path.join(parent, '.burnbar-stage-'));
   let backedUp = false;
@@ -66,7 +74,7 @@ async function install(options, runtime = { arch: process.arch }) {
       const result = run('/usr/bin/unzip', ['-p', archive, `BurnBar.app/${relative}`], { encoding: null });
       await fs.writeFile(path.join(bundle, relative), result.stdout, { mode: relative.endsWith('/burnbar') ? 0o755 : 0o644 });
     }
-    run('/usr/bin/plutil', ['-lint', path.join(bundle, 'Contents/Info.plist')]);
+    await validateBundle(bundle);
     // Ad-hoc signature is rebuilt after extracting the allowlisted files.
     run('/usr/bin/codesign', ['--force', '--deep', '--sign', '-', bundle]);
     try { await fs.rename(target, backup); backedUp = true; } catch (e) { if (e.code !== 'ENOENT') throw e; }

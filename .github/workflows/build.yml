@@ -43,6 +43,41 @@ jobs:
           bash scripts/build-macos.sh "$version"
           codesign --verify --deep --strict dist/BurnBar.app
           dist/BurnBar.app/Contents/MacOS/burnbar -demo -once -providers both
+      - name: macOS installer smoke (local synthetic release)
+        run: |
+          export APPDATA="$RUNNER_TEMP/BurnBar-installer-smoke"
+          node <<'NODE'
+          const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:os'),crypto=require('node:crypto');
+          const {spawnSync}=require('node:child_process');
+          const installer=require('./npm/macos/install.cjs');
+          (async()=>{
+            const arch=process.arch==='arm64'?'arm64':'amd64',name=`burnbar-macos-${arch}.zip`;
+            const root=await fs.mkdtemp(path.join(os.tmpdir(),'burnbar-installer-'));
+            const zip=await fs.readFile(path.join('dist',name)),sum=await fs.readFile(path.join('dist',name+'.sha256'));
+            const prefix='https://github.com/nooblk-98/burnbar/releases/download/dev-1-1/';
+            let bad=false;
+            global.fetch=async(url)=>{
+              if(url.endsWith('/releases/latest'))return new Response(JSON.stringify({tag_name:'v0.0.0',assets:[{name,browser_download_url:prefix+name},{name:name+'.sha256',browser_download_url:prefix+name+'.sha256'}]}));
+              if(url===prefix+name)return new Response(zip);
+              if(url===prefix+name+'.sha256')return new Response(bad?'0'.repeat(64):sum);
+              throw Error('Unexpected network request: '+url);
+            };
+            try{
+              const opts={channel:'stable',noStart:true,installDir:root};
+              await installer.install(opts);
+              const exe=path.join(root,'BurnBar.app/Contents/MacOS/burnbar');
+              const hash=crypto.createHash('sha256').update(await fs.readFile(exe)).digest('hex');
+              const result=spawnSync(exe,['-demo','-once','-providers','both'],{encoding:'utf8'});
+              if(result.status!==0||!result.stdout.includes('Claude'))throw Error('Installed executable failed');
+              await installer.install(opts);
+              bad=true;let rejected=false;try{await installer.install(opts)}catch(e){rejected=/checksum/.test(e.message)}
+              if(!rejected)throw Error('Bad checksum accepted');
+              if(crypto.createHash('sha256').update(await fs.readFile(exe)).digest('hex')!==hash)throw Error('Failed update changed existing app');
+              console.log('macOS installer install/repeat-update/checksum rollback checks passed');
+            }finally{await fs.rm(root,{recursive:true,force:true})}
+          })().catch(e=>{console.error(e.message);process.exitCode=1});
+          NODE
+
       - name: Native macOS UI smoke (synthetic, isolated profile)
         timeout-minutes: 2
         run: |

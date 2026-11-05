@@ -191,11 +191,14 @@ func bb_action(action C.int) {
 		mac.cfg.SnoozeUntil = 0
 		mac.cfg.Save()
 	case 5:
-		usage.AllowClaudeKeychain()
-		if !mac.readings[usage.Claude].RateLimited {
-			mac.next[usage.Claude] = time.Time{}
+		p := usage.Claude
+		if !mac.fetching[p] && (!mac.readings[p].RateLimited || !time.Now().Before(mac.next[p])) {
+			usage.AllowClaudeKeychain()
+			if !mac.readings[p].RateLimited {
+				mac.next[p] = time.Time{}
+			}
+			mac.fetch(p)
 		}
-		mac.fetch(usage.Claude)
 	case 4:
 		if time.Since(mac.lastUpdate) >= time.Minute {
 			mac.checkUpdates()
