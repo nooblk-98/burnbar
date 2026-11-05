@@ -25,6 +25,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -290,11 +291,14 @@ func bb_save(raw *C.char) *C.char {
 	c.QuietHours = input.QuietHours
 	c.ShowForecast = input.Forecast
 	c.CheckUpdates = input.Updates
-	// Rebaseline only on explicit save, never replay thresholds during editing.
-	c.MilestoneState = alerts.Tracker{}
-	if !mac.demo {
-		for _, p := range usage.Providers(c.Providers) {
-			c.MilestoneState.ObserveThresholds(mac.readings[p], c.PrimaryThresholds, c.SecondaryThresholds)
+	// Only threshold changes reset the tracker; unrelated saves must preserve
+	// high-water marks through corrections and avoid replaying old milestones.
+	if !slices.Equal(c.PrimaryThresholds, mac.cfg.PrimaryThresholds) || !slices.Equal(c.SecondaryThresholds, mac.cfg.SecondaryThresholds) {
+		c.MilestoneState = alerts.Tracker{}
+		if !mac.demo {
+			for _, p := range usage.Providers(c.Providers) {
+				c.MilestoneState.ObserveThresholds(mac.readings[p], c.PrimaryThresholds, c.SecondaryThresholds)
+			}
 		}
 	}
 	if e = c.SaveChecked(); e != nil {

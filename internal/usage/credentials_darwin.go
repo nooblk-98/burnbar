@@ -3,8 +3,10 @@
 package usage
 
 /*
-#cgo LDFLAGS: -framework Security -framework CoreFoundation
+#cgo CFLAGS: -x objective-c -fobjc-arc
+#cgo LDFLAGS: -framework Security -framework CoreFoundation -framework LocalAuthentication
 #include <Security/Security.h>
+#import <LocalAuthentication/LocalAuthentication.h>
 #include <stdlib.h>
 #include <string.h>
 static char *bb_claude_keychain(int prompt) {
@@ -13,7 +15,8 @@ static char *bb_claude_keychain(int prompt) {
  CFDictionarySetValue(query,kSecAttrService,CFSTR("Claude Code-credentials"));
  CFDictionarySetValue(query,kSecReturnData,kCFBooleanTrue);
  CFDictionarySetValue(query,kSecMatchLimit,kSecMatchLimitOne);
- CFDictionarySetValue(query,kSecUseAuthenticationUI,prompt?kSecUseAuthenticationUIAllow:kSecUseAuthenticationUIFail);
+ LAContext *context=[[LAContext alloc]init];context.interactionNotAllowed=!prompt;
+ CFDictionarySetValue(query,kSecUseAuthenticationContext,(__bridge CFTypeRef)context);
  CFTypeRef data=NULL;OSStatus status=SecItemCopyMatching(query,&data);CFRelease(query);
  if(status!=errSecSuccess||!data)return NULL;
  if(CFGetTypeID(data)!=CFDataGetTypeID()){CFRelease(data);return NULL;}

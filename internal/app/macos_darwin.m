@@ -114,7 +114,13 @@ static NSDictionary *readState(void) {
  if(!rep){fprintf(stderr,"Native view snapshot unavailable\n");return;}
  [view cacheDisplayInRect:view.bounds toBitmapImageRep:rep];
  NSString *dir=NSProcessInfo.processInfo.environment[@"APPDATA"] ?: NSTemporaryDirectory();
- NSData *data=[rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
+ // AppKit window materials are outside this view capture. Composite over the
+ // system window colour so transparent black text is readable in artifacts.
+ NSImage *composite=[[NSImage alloc]initWithSize:view.bounds.size];[composite lockFocus];
+ [NSColor.windowBackgroundColor setFill];NSRectFill(NSMakeRect(0,0,view.bounds.size.width,view.bounds.size.height));
+ [rep drawInRect:NSMakeRect(0,0,view.bounds.size.width,view.bounds.size.height)];[composite unlockFocus];
+ NSBitmapImageRep *opaque=[NSBitmapImageRep imageRepWithData:composite.TIFFRepresentation];
+ NSData *data=[opaque representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
  [data writeToFile:[dir stringByAppendingPathComponent:name] atomically:YES];
 }
 - (void)smokeStart {

@@ -282,7 +282,7 @@ jobs:
           $hash = (Get-FileHash bin/burnbar.exe -Algorithm SHA256).Hash.ToLower()
           "$hash  burnbar.exe" | Out-File -Encoding ascii bin/burnbar.exe.sha256
           @"
-          BurnBar is distributed unsigned.
+          Windows executable: unsigned. macOS preview: ad-hoc signed, not notarized.
 
           SHA-256 of ``burnbar.exe``: ``$hash``
           "@ | Out-File -Encoding utf8 notes.md
