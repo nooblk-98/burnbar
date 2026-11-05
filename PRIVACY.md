@@ -3,10 +3,16 @@
 This document describes BurnBar's own behavior in the current source code.
 Provider CLIs and services have their own settings and policies.
 
-## PowerShell installation
+## npx and PowerShell installation
+
+The npx command downloads the installer package through npm (or GitHub when using
+its GitHub package specifier); these services receive normal package-request
+metadata. The dependency-free CLI invokes the PowerShell script bundled in that
+package. No install/postinstall lifecycle hook runs BurnBar automatically.
 
 The optional [installer](install.ps1) checks the repository's latest stable
-release using GitHub's API and downloads its executable and checksum from GitHub
+release, or development prereleases when explicitly selected, using GitHub's API
+and downloads its executable and checksum from GitHub
 over HTTPS. It sends a `BurnBar-Installer` User-Agent; normal network metadata is
 also visible to GitHub. It does not need a provider login or GitHub token.
 

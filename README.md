@@ -74,7 +74,55 @@ You need Windows 10 or 11 and a signed-in provider:
 Both providers rotate through the meter by default. A missing login affects only that provider. Select
 **Usage providers** from the right-click menu to hide a provider you don't use.
 
-### Install or update with PowerShell
+### Install or update with npx
+
+Requires Windows, [Node.js 22+](https://nodejs.org/) (includes npm/npx), and
+Windows PowerShell 5.1. BurnBar itself does not need Node.js after installation.
+
+Once the maintainer enables npm publishing, install or update using:
+
+```powershell
+# Latest stable release (same command for first install and updates)
+npx --yes burnbar@latest install
+
+# Latest development build (may contain bugs)
+npx --yes burnbar@development install
+
+# Switch back to stable
+npx --yes burnbar@latest update --channel stable
+```
+
+`latest` and `development` are **npm installer channels**. The installer selects
+the matching **GitHub binary channel** by default; `--channel` overrides it.
+The installer package version is not a pin to a particular executable version:
+each invocation checks GitHub for the latest published build of that channel.
+Updates are explicit, not an always-running automatic updater.
+
+**Before the first npm publish**, use the GitHub-backed package instead (also
+requires Git). These commands do not require an npm account or npm publication:
+
+```powershell
+npx --yes github:nooblk-98/burnbar#development install --channel stable
+npx --yes github:nooblk-98/burnbar#development install --channel development
+```
+
+Both channels use `%LOCALAPPDATA%\Programs\BurnBar` and preserve existing settings,
+history and startup preferences when switching. The CLI delegates to its bundled
+PowerShell installer, verifies SHA-256 before replacing anything, and creates a
+Start menu shortcut. A development push publishes an immutable prerelease build;
+stable installs never select those prereleases.
+
+```powershell
+# Optional flags work with either package source
+npx --yes burnbar@latest update --install-dir 'D:\Apps\BurnBar' --no-start
+npx --yes burnbar@development install --dry-run
+```
+
+`--dry-run` reads release metadata only: no binary download, file replacement,
+process shutdown or launch. See [release setup](docs/RELEASING.md) for npm publishing.
+
+### Install or update with PowerShell (no Node.js required)
+
 
 Run this in a regular PowerShell window; administrator access is not needed:
 

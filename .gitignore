@@ -24,3 +24,7 @@ desktop.ini
 
 # Local Claude Code settings
 .claude/settings.local.json
+
+# npm packaging and dependencies
+node_modules/
+*.tgz

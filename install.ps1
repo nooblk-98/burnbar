@@ -1,7 +1,7 @@
 #requires -Version 5.1
 <#
 .SYNOPSIS
-Installs or updates the latest published BurnBar release for the current user.
+Installs or updates a stable or development BurnBar release for the current user.
 .EXAMPLE
 & .\install.ps1
 .EXAMPLE
@@ -10,7 +10,9 @@ Installs or updates the latest published BurnBar release for the current user.
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
     [string]$InstallDir = (Join-Path $env:LOCALAPPDATA 'Programs\BurnBar'),
-    [switch]$NoStart
+    [switch]$NoStart,
+    [ValidateSet('stable', 'development')]
+    [string]$Channel = 'stable'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -54,10 +56,23 @@ function Get-BurnBarProcesses {
 
 try {
     [Net.ServicePointManager]::SecurityProtocol = $previousTls -bor [Net.SecurityProtocolType]::Tls12
-    Write-Host 'Checking the latest BurnBar release...'
-    $release = Invoke-RestMethod -Uri 'https://api.github.com/repos/nooblk-98/burnbar/releases/latest' -Headers $headers -TimeoutSec 30
-    if ($release.draft -or $release.prerelease -or -not $release.tag_name) {
-        throw 'GitHub did not return a published stable release.'
+    Write-Host "Checking the latest BurnBar $Channel release..."
+    if ($Channel -eq 'stable') {
+        $release = Invoke-RestMethod -Uri 'https://api.github.com/repos/nooblk-98/burnbar/releases/latest' -Headers $headers -TimeoutSec 30
+        if ($release.draft -or $release.prerelease -or -not $release.tag_name) {
+            throw 'GitHub did not return a published stable release.'
+        }
+    } else {
+        # Each development build has immutable assets. Never update two assets on
+        # a rolling release, where concurrent clients could fetch a mixed pair.
+        $release = $null
+        for ($page = 1; $page -le 20; $page++) {
+            $releases = @(Invoke-RestMethod -Uri "https://api.github.com/repos/nooblk-98/burnbar/releases?per_page=100&page=$page" -Headers $headers -TimeoutSec 30)
+            $release = $releases | Where-Object { -not $_.draft -and $_.prerelease -and $_.tag_name -match '^dev-[0-9]+-[0-9]+$' } | Select-Object -First 1
+            if ($release -or $releases.Count -lt 100) { break }
+        }
+        if (-not $release) { throw 'No published development build was found. Try the stable channel or wait for the development workflow.' }
+        Write-Warning 'Installing an unreleased development build. Switch to --channel stable to return to a stable release.'
     }
     $exeAssets = @($release.assets | Where-Object { $_.name -ceq 'burnbar.exe' })
     $hashAssets = @($release.assets | Where-Object { $_.name -ceq 'burnbar.exe.sha256' })
@@ -66,8 +81,9 @@ try {
     }
     foreach ($asset in @($exeAssets[0], $hashAssets[0])) {
         $assetUri = [Uri]$asset.browser_download_url
+        $expectedAssetPath = '/nooblk-98/burnbar/releases/download/' + [Uri]::EscapeDataString($release.tag_name) + '/' + $asset.name
         if ($assetUri.Scheme -ne 'https' -or $assetUri.Host -ne 'github.com' -or
-            -not $assetUri.AbsolutePath.StartsWith('/nooblk-98/burnbar/releases/download/')) {
+            $assetUri.AbsolutePath -cne $expectedAssetPath -or $assetUri.Query -or $assetUri.Fragment) {
             throw 'The release contains an unexpected download URL.'
         }
     }

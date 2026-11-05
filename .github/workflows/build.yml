@@ -4,7 +4,7 @@ name: build
 
 on:
   push:
-    branches: [main]
+    branches: [main, development]
     tags: ["v*"]
   pull_request:
   workflow_dispatch:
@@ -21,6 +21,8 @@ jobs:
       version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-go@v7
         with:
@@ -30,8 +32,49 @@ jobs:
         id: version
         shell: pwsh
         run: |
-          $v = if ($env:GITHUB_REF_TYPE -eq "tag") { $env:GITHUB_REF_NAME.TrimStart("v") } else { "0.0.0-dev" }
+          $v = "0.0.0-dev"
+          if ($env:GITHUB_REF_TYPE -eq "tag") {
+            $v = $env:GITHUB_REF_NAME.TrimStart("v")
+            if (-not $v.Contains("-")) {
+              git fetch --no-tags origin main
+              if ($LASTEXITCODE -ne 0) { throw "Could not fetch main" }
+              git merge-base --is-ancestor $env:GITHUB_SHA origin/main
+              if ($LASTEXITCODE -ne 0) { throw "Stable release tags must point to a commit on main" }
+            }
+          } elseif ($env:GITHUB_REF -eq "refs/heads/development") {
+            $v = "0.0.0-dev.$env:GITHUB_RUN_NUMBER.$env:GITHUB_RUN_ATTEMPT"
+          }
           "version=$v" >> $env:GITHUB_OUTPUT
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Check npm package and stable install/update
+        shell: pwsh
+        run: |
+          npm ci --ignore-scripts
+          if ($LASTEXITCODE -ne 0) { throw "npm ci failed" }
+          $env:APPDATA = Join-Path $env:RUNNER_TEMP 'BurnBar smoke profile'
+          $installDir = Join-Path $env:RUNNER_TEMP 'BurnBar smoke install'
+          $profile = Join-Path $env:APPDATA 'BurnBar'
+          New-Item -ItemType Directory -Force $profile | Out-Null
+          '{"startWithWindows":false}' | Set-Content (Join-Path $profile 'config.json')
+          'history fixture' | Set-Content (Join-Path $profile 'history.jsonl')
+          $packed = npm pack --json | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw "npm pack failed" }
+          $package = Join-Path $PWD $packed[0].filename
+          npx --yes --package $package burnbar install --channel stable --no-start --install-dir $installDir
+          if ($LASTEXITCODE -ne 0) { throw "Stable install smoke check failed" }
+          $exe = Join-Path $installDir 'burnbar.exe'
+          $hash = (Get-FileHash $exe -Algorithm SHA256).Hash
+          $stamp = (Get-Item $exe).LastWriteTimeUtc
+          npx --yes --package $package burnbar update --channel stable --no-start --install-dir $installDir
+          if ($LASTEXITCODE -ne 0) { throw "Stable update smoke check failed" }
+          if ((Get-FileHash $exe -Algorithm SHA256).Hash -ne $hash -or (Get-Item $exe).LastWriteTimeUtc -ne $stamp) { throw "Current executable was rewritten" }
+          if ((Get-Content (Join-Path $profile 'config.json') -Raw).Trim() -ne '{"startWithWindows":false}') { throw "Settings changed" }
+          if ((Get-Content (Join-Path $profile 'history.jsonl') -Raw).Trim() -ne 'history fixture') { throw "History changed" }
+          Remove-Item -LiteralPath $package
 
       - name: Vet
         run: go vet ./...
@@ -64,6 +107,51 @@ jobs:
           gh release create "$env:GITHUB_REF_NAME" bin/burnbar.exe bin/burnbar.exe.sha256 install.ps1 `
             --repo "$env:GITHUB_REPOSITORY" --verify-tag --title "BurnBar $env:GITHUB_REF_NAME" `
             --generate-notes --notes-file notes.md @extra
+
+      - name: Publish immutable development release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/development'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "dev-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          $hash = (Get-FileHash bin/burnbar.exe -Algorithm SHA256).Hash.ToLower()
+          "$hash  burnbar.exe" | Out-File -Encoding ascii bin/burnbar.exe.sha256
+          gh release create $tag bin/burnbar.exe bin/burnbar.exe.sha256 install.ps1 `
+            --repo "$env:GITHUB_REPOSITORY" --target "$env:GITHUB_SHA" --prerelease --latest=false `
+            --title "BurnBar development ${{ steps.version.outputs.version }}" `
+            --notes "Unreleased development build from $env:GITHUB_SHA. Unsigned. May contain bugs."
+          if ($LASTEXITCODE -ne 0) { throw "Development release failed" }
+          $env:APPDATA = Join-Path $env:RUNNER_TEMP 'BurnBar development smoke profile'
+          node npm/bin/burnbar.cjs install --channel development --no-start --install-dir (Join-Path $env:RUNNER_TEMP 'BurnBar development smoke install')
+          if ($LASTEXITCODE -ne 0) { throw "Development install smoke check failed" }
+
+  npm:
+    # Enable only after the first npm publish and trusted publisher setup.
+    # Dev commits use the development dist-tag; stable version tags use latest.
+    if: >-
+      vars.NPM_PUBLISH_ENABLED == 'true' && github.event_name == 'push' &&
+      (github.ref == 'refs/heads/development' ||
+       (startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-')))
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+      - name: Set installer package version
+        env:
+          PACKAGE_VERSION: ${{ needs.build.outputs.version }}
+        run: npm version "$PACKAGE_VERSION" --no-git-tag-version --ignore-scripts
+      - name: Publish installer via npm trusted publishing
+        env:
+          DIST_TAG: ${{ github.ref == 'refs/heads/development' && 'development' || 'latest' }}
+        run: npm publish --access public --provenance --tag "$DIST_TAG"
 
   winget:
     # Requires an existing winget package; see docs/RELEASING.md.
