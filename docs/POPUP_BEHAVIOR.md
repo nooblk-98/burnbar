@@ -8,7 +8,8 @@ weekly/7d). A new 10% boundary, up through 100%, opens one compact notice withou
 activating the window. The saved close delay (six seconds by default) applies to
 both automatic notices and manually opened views. A 12% → 43% jump shows 40% once, not three
 successive notices. More events during an existing notice update it without
-extending the original deadline. Only affected providers are shown automatically.
+extending the original deadline. Only affected quotas are shown in the default compact notice. Full provider cards
+are optional in Settings.
 
 The first reading of an untracked window establishes its baseline silently. For
 example, starting at 85% does not replay 10–80%; the next notice is at 90%.
@@ -33,7 +34,7 @@ queue a backlog. Fullscreen hides an existing automatic card and cancels it.
 - Manual views close after the same selected delay. Deliberate clicks restart the
   timer; background fetches do not. Clicking elsewhere, Esc or Alt+F4 closes them
   sooner. A stale earlier timer cannot close a newly reopened view prematurely.
-- Right-click → **Milestone popups (10% steps)** controls automatic cards.
+- Right-click → **Automatic usage milestones** controls automatic cards.
   Disable it for tray-click-only behavior.
 - **Close popup after** offers 3, 5, 6, 10, 15, 30 and 60 seconds; it is saved across
   restarts and applies to all ordinary popup openings.
@@ -43,6 +44,14 @@ queue a backlog. Fullscreen hides an existing automatic card and cancels it.
 - Existing Windows 80%/95%/reset notifications have a separate **Windows alerts**
   switch. The taskbar widget, placement worker, animation and menu settings have been
   removed. Only the notification icon and popups remain.
+
+## Expanded preferences
+
+Settings now provides independent session/weekly thresholds, compact/full/native
+notices, 1–300 second close delays, snooze and overnight quiet hours. The same
+high-water/reset rules apply to custom thresholds, and suppressed events never
+queue. See the [settings guide](SETTINGS.md) for exact behavior, keyboard/readable
+views, forecasts, updates and Windows Focus/DND limitations.
 
 ## Upgrade
 

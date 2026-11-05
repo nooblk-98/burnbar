@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/nooblk-98/burnbar/internal/history"
+	"github.com/nooblk-98/burnbar/internal/insights"
 	"github.com/nooblk-98/burnbar/internal/usage"
 
 	"golang.org/x/image/font"
@@ -31,12 +32,14 @@ var (
 )
 
 type Theme struct {
-	light  bool
-	text   color.NRGBA
-	sub    color.NRGBA
-	track  color.NRGBA
-	bg     color.NRGBA
-	border color.NRGBA
+	highContrast bool
+	accent       color.NRGBA
+	light        bool
+	text         color.NRGBA
+	sub          color.NRGBA
+	track        color.NRGBA
+	bg           color.NRGBA
+	border       color.NRGBA
 }
 
 func NewTheme(light bool) Theme {
@@ -50,6 +53,29 @@ func NewTheme(light bool) Theme {
 		text: color.NRGBA{0xFF, 0xFF, 0xFF, 0xFF}, sub: color.NRGBA{0xA8, 0xA8, 0xA8, 0xFF},
 		track: color.NRGBA{0xFF, 0xFF, 0xFF, 0x30}, bg: color.NRGBA{0x2B, 0x2B, 0x2B, 0xFF},
 		border: color.NRGBA{0x45, 0x45, 0x45, 0xFF}}
+}
+
+// HighContrastTheme uses system colours for every foreground, including charts.
+func HighContrastTheme(background, text, highlight color.NRGBA) Theme {
+	return Theme{highContrast: true, bg: background, text: text, sub: text, track: withAlpha(text, 70), border: text, accent: highlight}
+}
+func (th Theme) bar(w *usage.Window) color.NRGBA {
+	if th.highContrast {
+		return th.text
+	}
+	return barColor(w)
+}
+func (th Theme) warning() color.NRGBA {
+	if th.highContrast {
+		return th.text
+	}
+	return colorHot
+}
+func (th Theme) chart(c color.NRGBA) color.NRGBA {
+	if th.highContrast {
+		return th.text
+	}
+	return c
 }
 
 func withAlpha(c color.NRGBA, a uint8) color.NRGBA { c.A = a; return c }
@@ -172,7 +198,7 @@ func drawMeter(img *image.RGBA, x0, y0, x1, y1 float64, w *usage.Window, th Them
 		return
 	}
 	if frac := math.Max(0, math.Min(1, w.Percent/100)); frac > 0 {
-		fillRoundRect(img, x0, y0, x0+math.Max(frac*(x1-x0), h), y1, h/2, barColor(w))
+		fillRoundRect(img, x0, y0, x0+math.Max(frac*(x1-x0), h), y1, h/2, th.bar(w))
 	}
 	if e, ok := w.Elapsed(); ok {
 		tx := x0 + e*(x1-x0)
@@ -285,9 +311,12 @@ func peak(samples []history.Sample, get func(history.Sample) float64) float64 {
 
 // Popup draws the details panel opened from the tray popup.
 func Popup(scale float64, u usage.Usage, hist []history.Sample, th Theme) *image.RGBA {
+	return popup(scale, u, hist, th, false, 10*time.Minute)
+}
+func popup(scale float64, u usage.Usage, hist []history.Sample, th Theme, forecast bool, staleAfter time.Duration) *image.RGBA {
 	s := func(v float64) float64 { return v * scale }
 	W := int(math.Round(s(popupW)))
-	content := image.NewRGBA(image.Rect(0, 0, W, int(s(900))))
+	content := image.NewRGBA(image.Rect(0, 0, W, int(s(2400))))
 	title := faceFor(s(14), true)
 	body := faceFor(s(12), false)
 	bodyB := faceFor(s(12), true)
@@ -300,11 +329,16 @@ func Popup(scale float64, u usage.Usage, hist []history.Sample, th Theme) *image
 		drawTextRight(content, small, "Updated "+u.UpdatedAt.Format("3:04 PM"), right, y, th.sub)
 	}
 	y += s(10)
+	status := insights.Health(u, time.Now(), staleAfter)
+	if status != "" {
+		y += s(18)
+		drawText(content, small, status+" — "+insights.Age(u.UpdatedAt, time.Now()), left, y, th.warning())
+	}
 
 	for _, w := range u.All() {
 		y += s(14) + capHeight(body)
 		drawText(content, body, w.Label, left, y, th.text)
-		drawTextRight(content, bodyB, fmt.Sprintf("%.0f%%", w.Percent), right, y, barColor(w))
+		drawTextRight(content, bodyB, fmt.Sprintf("%.0f%%", w.Percent), right, y, th.bar(w))
 		y += s(7)
 		drawMeter(content, left, y, right, y+s(8), w, th, scale)
 		y += s(8) + s(6) + capHeight(small)
@@ -312,16 +346,22 @@ func Popup(scale float64, u usage.Usage, hist []history.Sample, th Theme) *image
 		if p, above := paceText(w); p != "" {
 			c := th.sub
 			if above {
-				c = colorWarn
+				c = th.chart(colorWarn)
 			}
 			drawTextRight(content, small, p, right, y, c)
+		}
+		if forecast && (w == u.FiveHour || w == u.SevenDay) {
+			if f, ok := insights.Estimate(u, hist, w == u.SevenDay, time.Now()); ok {
+				y += s(18)
+				drawText(content, small, f.Text(), left, y, th.sub)
+			}
 		}
 	}
 
 	if u.Err != "" {
 		for _, line := range wrapText(small, u.Err, right-left) {
 			y += s(7) + capHeight(small)
-			drawText(content, small, line, left, y, colorHot)
+			drawText(content, small, line, left, y, th.warning())
 		}
 		if len(u.All()) > 0 {
 			y += s(7) + capHeight(small)
@@ -356,7 +396,7 @@ func Popup(scale float64, u usage.Usage, hist []history.Sample, th Theme) *image
 			drawTextRight(content, small, fmt.Sprintf("peak %.0f%%", p), right, y, th.sub)
 		}
 		y += s(6)
-		drawSpark(content, left, y, right, y+s(36), pts, ch.get, ch.from, now, ch.maxGap, ch.c, th, scale)
+		drawSpark(content, left, y, right, y+s(36), pts, ch.get, ch.from, now, ch.maxGap, th.chart(ch.c), th, scale)
 		y += s(36)
 	}
 
@@ -370,13 +410,13 @@ func Popup(scale float64, u usage.Usage, hist []history.Sample, th Theme) *image
 			bx0, bx1 := left+s(96), right-s(40)
 			cy := y - capHeight(small)/2
 			fillRoundRect(content, bx0, cy-s(2), bx1, cy+s(2), s(2), th.track)
-			fillRoundRect(content, bx0, cy-s(2), bx0+math.Max(sh.Percent/100*(bx1-bx0), s(4)), cy+s(2), s(2), colorOther)
+			fillRoundRect(content, bx0, cy-s(2), bx0+math.Max(sh.Percent/100*(bx1-bx0), s(4)), cy+s(2), s(2), th.chart(colorOther))
 			y += s(2)
 		}
 	}
 
 	y += s(18) + capHeight(small)
-	drawText(content, small, "Click to refresh · right-click for options", left, y, th.sub)
+	drawText(content, small, "R: refresh · S: settings · F6: readable usage", left, y, th.sub)
 	H := int(math.Ceil(y + s(popupPad)))
 
 	img := image.NewRGBA(image.Rect(0, 0, W, H))
@@ -388,11 +428,17 @@ func Popup(scale float64, u usage.Usage, hist []history.Sample, th Theme) *image
 
 // TrayIcon draws two stacked bars for the notification-area icon.
 func TrayIcon(size int, u usage.Usage, light bool) *image.RGBA {
+	return trayIcon(size, u, NewTheme(light))
+}
+func trayIcon(size int, u usage.Usage, th Theme) *image.RGBA {
 	img := image.NewRGBA(image.Rect(0, 0, size, size))
 	s := float64(size) / 16
 	track := color.NRGBA{0xFF, 0xFF, 0xFF, 0x50}
-	if light {
+	if th.light {
 		track = color.NRGBA{0, 0, 0, 0x40}
+	}
+	if th.highContrast {
+		track = th.track
 	}
 	for i, w := range []*usage.Window{u.FiveHour, u.SevenDay} {
 		y0 := (2 + float64(i)*7) * s
@@ -400,7 +446,7 @@ func TrayIcon(size int, u usage.Usage, light bool) *image.RGBA {
 		fillRoundRect(img, 0, y0, float64(size), y1, 1.5*s, track)
 		if w != nil && w.Percent > 0 {
 			fw := math.Max(w.Percent/100*float64(size), 3*s)
-			fillRoundRect(img, 0, y0, math.Min(fw, float64(size)), y1, 1.5*s, barColor(w))
+			fillRoundRect(img, 0, y0, math.Min(fw, float64(size)), y1, 1.5*s, th.bar(w))
 		}
 	}
 	return img

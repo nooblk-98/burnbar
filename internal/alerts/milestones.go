@@ -7,15 +7,19 @@ import (
 )
 
 type MilestoneState struct {
-	Reset  int64 `json:"reset"`
-	Length int64 `json:"length"`
-	Level  int   `json:"level"`
+	Reset     int64    `json:"reset"`
+	Length    int64    `json:"length"`
+	Level     int      `json:"level"`
+	HighWater *float64 `json:"highWater,omitempty"`
 }
 
 type Milestone struct {
 	Provider usage.Provider
 	Label    string
 	Level    int
+	Window   int
+	Percent  float64
+	ResetsAt time.Time
 }
 
 type Tracker map[string]MilestoneState
@@ -23,7 +27,11 @@ type Tracker map[string]MilestoneState
 // Observe uses the first valid reading of each quota window as a baseline, not
 // a backlog of alerts. Only a new high-water decade in the same window alerts.
 // Persisting this state prevents polling, corrections and restarts replaying it.
-func (t Tracker) Observe(u usage.Usage) (events []Milestone, changed bool) {
+func (t Tracker) Observe(u usage.Usage) ([]Milestone, bool) {
+	return t.ObserveThresholds(u, DefaultThresholds(), DefaultThresholds())
+}
+
+func (t Tracker) ObserveThresholds(u usage.Usage, primary, secondary []int) (events []Milestone, changed bool) {
 	if u.Err != "" || u.RateLimited {
 		return nil, false
 	}
@@ -40,21 +48,34 @@ func (t Tracker) Observe(u usage.Usage) (events []Milestone, changed bool) {
 		if !w.ResetsAt.IsZero() {
 			reset = w.ResetsAt.Truncate(time.Minute).Unix()
 		}
-		cur := MilestoneState{Reset: reset, Length: int64(w.Length), Level: int(w.Percent/10) * 10}
 		prev, seen := t[key]
-		same := seen && prev.Reset == cur.Reset && prev.Length == cur.Length
-		// If no reset is reported, seeing usage fall back below 10% rearms the quota.
-		if same && reset == 0 && cur.Level == 0 && prev.Level > 0 {
+		high := float64(prev.Level)
+		if prev.HighWater != nil {
+			high = *prev.HighWater
+		}
+		same := seen && prev.Reset == reset && prev.Length == int64(w.Length)
+		if same && reset == 0 && w.Percent < 10 && high >= 10 {
 			same = false
 		}
+		nextHigh := w.Percent
 		if same {
-			if cur.Level > prev.Level {
-				label := usage.WindowShortLabel(w, []string{"primary", "secondary"}[i])
-				events = append(events, Milestone{Provider: u.Provider, Label: label, Level: cur.Level})
+			thresholds := primary
+			if i == 1 {
+				thresholds = secondary
 			}
-			cur.Level = max(cur.Level, prev.Level)
+			level := 0
+			for _, value := range thresholds {
+				if float64(value) > high && float64(value) <= w.Percent {
+					level = max(level, value)
+				}
+			}
+			if level > 0 {
+				events = append(events, Milestone{Provider: u.Provider, Label: usage.WindowShortLabel(w, []string{"primary", "secondary"}[i]), Level: level, Window: i, Percent: w.Percent, ResetsAt: w.ResetsAt})
+			}
+			nextHigh = max(high, w.Percent)
 		}
-		if !seen || cur != prev {
+		cur := MilestoneState{Reset: reset, Length: int64(w.Length), Level: int(nextHigh/10) * 10, HighWater: &nextHigh}
+		if !seen || prev.Reset != cur.Reset || prev.Length != cur.Length || high != nextHigh || prev.HighWater == nil {
 			t[key] = cur
 			changed = true
 		}

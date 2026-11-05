@@ -11,7 +11,13 @@ const (
 )
 
 func (a *app) showMessage(title, message string) {
-	pMessageBoxW.Call(a.main, uintptr(unsafe.Pointer(utf16(message))),
+	owner := a.main
+	if a.settings != nil {
+		owner = a.settings.hwnd
+	} else if a.accessible != nil {
+		owner = a.accessible.hwnd
+	}
+	pMessageBoxW.Call(owner, uintptr(unsafe.Pointer(utf16(message))),
 		uintptr(unsafe.Pointer(utf16(title))), MB_OK|MB_ICONINFORMATION)
 }
 
@@ -24,7 +30,7 @@ func (a *app) showAbout() {
 		version = "dev"
 	}
 	a.showMessage("About BurnBar", fmt.Sprintf(
-		"BurnBar %s\n\nClaude and Codex usage monitor for the Windows taskbar.\n\nDeveloped by %s\n\nRepository:\n%s\n\nMIT License\n\nAn unofficial community project, not affiliated with Anthropic or OpenAI.",
+		"BurnBar %s\n\nClaude and Codex usage monitor for the Windows notification area.\n\nDeveloped by %s\n\nRepository:\n%s\n\nMIT License\n\nAn unofficial community project, not affiliated with Anthropic or OpenAI.",
 		version, developerName, repositoryURL))
 }
 

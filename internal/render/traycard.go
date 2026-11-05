@@ -7,24 +7,26 @@ import (
 	"math"
 	"time"
 
+	"github.com/nooblk-98/burnbar/internal/alerts"
+	"github.com/nooblk-98/burnbar/internal/insights"
 	"github.com/nooblk-98/burnbar/internal/usage"
 	xdraw "golang.org/x/image/draw"
 )
 
 // TrayCard is the small persistent overview; the full charts remain a click away.
 func TrayCard(scale float64, readings []usage.Usage, th Theme) *image.RGBA {
-	return trayCard(scale, readings, th, "", false)
+	return trayCard(scale, readings, th, "", false, 10*time.Minute)
 }
 
 func TrayMilestoneCard(scale float64, readings []usage.Usage, th Theme, notice string) *image.RGBA {
-	return trayCard(scale, readings, th, notice, false)
+	return trayCard(scale, readings, th, notice, false, 10*time.Minute)
 }
 
 func TrayPinnedCard(scale float64, readings []usage.Usage, th Theme) *image.RGBA {
-	return trayCard(scale, readings, th, "", true)
+	return trayCard(scale, readings, th, "", true, 10*time.Minute)
 }
 
-func trayCard(scale float64, readings []usage.Usage, th Theme, notice string, persistent bool) *image.RGBA {
+func trayCard(scale float64, readings []usage.Usage, th Theme, notice string, persistent bool, staleAfter time.Duration) *image.RGBA {
 	noticeFace := faceFor(11*scale, true)
 	lines := wrapText(noticeFace, notice, 292*scale)
 	if len(lines) > 2 {
@@ -32,7 +34,7 @@ func trayCard(scale float64, readings []usage.Usage, th Theme, notice string, pe
 	}
 	header := float64(len(lines) * 16)
 	w := int(math.Round(320 * scale))
-	h := int(math.Round((float64(30+len(readings)*94) + header) * scale))
+	h := int(math.Round((float64(30+len(readings)*114) + header) * scale))
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
 	fillRoundRect(img, 0, 0, float64(w), float64(h), 10*scale, th.border)
 	fillRoundRect(img, 1, 1, float64(w)-1, float64(h)-1, 10*scale-1, th.bg)
@@ -41,14 +43,25 @@ func trayCard(scale float64, readings []usage.Usage, th Theme, notice string, pe
 		drawText(img, noticeFace, line, 14*scale, float64(18+i*16)*scale, th.text)
 	}
 	for i, u := range readings {
-		y := (float64(20+i*94) + header) * scale
+		y := (float64(20+i*114) + header) * scale
 		drawText(img, title, u.Name(), 14*scale, y, th.text)
-		if u.Err != "" {
-			status := "Unavailable"
-			if len(u.All()) > 0 {
-				status = "Last reading"
+		status := insights.Health(u, time.Now(), staleAfter)
+		if status != "" {
+			label := "! Last reading"
+			if len(u.All()) == 0 {
+				label = "! Unavailable"
 			}
-			drawTextRight(img, small, status, float64(w)-14*scale, y, colorHot)
+			drawTextRight(img, small, label, float64(w)-14*scale, y, th.warning())
+		}
+		statusLine := insights.Age(u.UpdatedAt, time.Now())
+		if status != "" {
+			statusLine = status + " · " + statusLine
+		}
+		for k, line := range wrapText(small, statusLine, 292*scale) {
+			if k >= 2 {
+				break
+			}
+			drawText(img, small, line, 14*scale, y+float64(74+k*12)*scale, th.sub)
 		}
 		for j, win := range []*usage.Window{u.FiveHour, u.SevenDay} {
 			cy := y + float64(20+j*26)*scale
@@ -58,7 +71,7 @@ func trayCard(scale float64, readings []usage.Usage, th Theme, notice string, pe
 			if win != nil {
 				value = fmt.Sprintf("%.0f%%", win.Percent)
 			}
-			drawTextRight(img, body, value, float64(w)-14*scale, cy, barColor(win))
+			drawTextRight(img, body, value, float64(w)-14*scale, cy, th.bar(win))
 			left := max(48*scale, 18*scale+textWidth(body, label))
 			drawMeter(img, left, cy-7*scale, float64(w)-60*scale, cy-2*scale, win, th, scale)
 			if win != nil && !win.ResetsAt.IsZero() {
@@ -66,7 +79,7 @@ func trayCard(scale float64, readings []usage.Usage, th Theme, notice string, pe
 			}
 		}
 	}
-	footer := "Auto closes · click for details"
+	footer := "Click / Enter: details · F6: readable usage"
 	if persistent {
 		footer = "Always shown · click for details"
 	}
@@ -113,4 +126,38 @@ func FitPopup(img *image.RGBA, maxW, maxH int) *image.RGBA {
 	out := image.NewRGBA(image.Rect(0, 0, w, h))
 	xdraw.CatmullRom.Scale(out, out.Rect, img, img.Rect, draw.Src, nil)
 	return out
+}
+
+// TrayStatusCard displays freshness with the configured refresh interval.
+func TrayStatusCard(scale float64, readings []usage.Usage, th Theme, staleAfter time.Duration) *image.RGBA {
+	return trayCard(scale, readings, th, "", false, staleAfter)
+}
+
+// CompactNotice deliberately contains only the quotas that just crossed a
+// threshold. Several quotas share one timed notice, never a cascade of cards.
+func CompactNotice(scale float64, events []alerts.Milestone, th Theme) *image.RGBA {
+	title, body, small := faceFor(12*scale, true), faceFor(11*scale, false), faceFor(10*scale, false)
+	var lines []string
+	for _, e := range events {
+		text := fmt.Sprintf("%s %s: %.0f%% used (%d%% crossed)", e.Provider.Name(), e.Label, e.Percent, e.Level)
+		lines = append(lines, wrapText(body, text, 292*scale)...)
+		if !e.ResetsAt.IsZero() {
+			lines = append(lines, wrapText(body, "Resets in "+shortDuration(time.Until(e.ResetsAt)), 292*scale)...)
+		}
+	}
+	h := int(float64(66+len(lines)*17) * scale)
+	w := int(320 * scale)
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	fillRoundRect(img, 0, 0, float64(w), float64(h), 10*scale, th.border)
+	fillRoundRect(img, 1, 1, float64(w)-1, float64(h)-1, 10*scale-1, th.bg)
+	drawText(img, title, "Usage milestone", 14*scale, 22*scale, th.text)
+	for i, line := range lines {
+		drawText(img, body, line, 14*scale, float64(44+i*17)*scale, th.text)
+	}
+	drawText(img, small, "Click for full usage · closes automatically", 14*scale, float64(h)-12*scale, th.sub)
+	return img
+}
+
+func TrayPinnedStatusCard(scale float64, readings []usage.Usage, th Theme, staleAfter time.Duration) *image.RGBA {
+	return trayCard(scale, readings, th, "", true, staleAfter)
 }

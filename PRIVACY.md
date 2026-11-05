@@ -56,8 +56,10 @@ The watcher does not read conversation contents, prompts, or source code.
 For popup placement, BurnBar reads its notification icon's rectangle and the
 monitor work area. It does not inspect taskbar controls or use UI Automation.
 Fullscreen detection reads the foreground window's class, process filename, and
-bounds, only to hide/suppress popups. Windows theme and display scaling are also
-read locally. Native tray tooltips are temporarily cleared while a card is open.
+bounds, only to hide/suppress popups. Windows theme, high-contrast system colours and display scaling are also
+read locally. BurnBar reads the shell notification state and, when supported,
+Windows Focus-session status to suppress automatic notices. Quiet schedules and
+snooze are evaluated locally; Windows quiet settings are never changed. Native tray tooltips are temporarily cleared while a card is open.
 
 On its first normal launch with a new profile, BurnBar enables **Start with Windows**
 by adding the executable to the current user's startup registry entry. Existing
@@ -68,13 +70,28 @@ diagnostic modes do not automatically add a startup entry.
 Choosing **Open GitHub repository** in the menu opens the project's public GitHub
 page in your default browser. The About dialog itself does not make a network request.
 
+## Stable update checks
+
+When enabled (default), the app requests public latest-stable metadata from
+`https://api.github.com/repos/nooblk-98/burnbar/releases/latest` at launch and at
+most daily while running. Settings can disable automatic checks; Check now is
+manual. Requests have a `BurnBar update check` User-Agent and no authorization
+header, usage history, provider credentials or account identifiers. GitHub sees
+normal network-request metadata. Release notes open GitHub in your browser.
+Copy command writes only the displayed install/update command to your clipboard.
+The app does not download or install an update automatically.
+
+Forecasts are calculated locally from existing percentage/timestamp history.
+The optional global Ctrl+Alt+B shortcut registers only that combination; it is
+not a keyboard logger. Readable usage uses standard Windows accessibility controls.
+
 ## Data saved on your PC
 
 BurnBar stores its files under `%APPDATA%\BurnBar\`:
 
 | File | Contents |
 | --- | --- |
-| `config.json` | Provider selection, startup preference, popup preferences and close delay, refresh interval, and alert state, including quota percentages, reset timestamps, and milestone high-water levels/window durations used to avoid duplicate popup notifications |
+| `config.json` | Provider selection, startup preference, popup/theme/text-size preferences and close delay, threshold lists, snooze expiry, local quiet-hour schedule, hotkey/update-check/forecast preferences, refresh interval, and alert state, including quota percentages, reset timestamps, and milestone high-water levels/window durations used to avoid duplicate popup notifications |
 | `history.jsonl` | Claude session and weekly percentages with timestamps |
 | `history-codex.jsonl` | Codex primary and secondary percentages with timestamps |
 
@@ -86,7 +103,7 @@ Older `ClaudeUsageMeter` settings may be migrated into the BurnBar folder.
 
 Usage responses are also held in memory to draw the meter and details panel.
 BurnBar's code does not include telemetry, analytics, or cloud synchronization.
-Its own direct HTTP usage request is to Anthropic; Codex service traffic is
+Its own direct HTTP usage request is to Anthropic, and optional update metadata requests go to GitHub; Codex service traffic is
 handled by the installed CLI. Your system's network/proxy settings still apply.
 
 ## Diagnostics and shared reports

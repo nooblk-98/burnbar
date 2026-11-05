@@ -89,6 +89,84 @@ jobs:
         shell: pwsh
         run: go build -trimpath -ldflags "-H windowsgui -s -w -X main.version=${{ steps.version.outputs.version }}" -o bin/burnbar.exe ./cmd/burnbar
 
+      - name: Smoke-check native settings and readable usage
+        timeout-minutes: 2
+        shell: pwsh
+        run: |
+          $env:APPDATA = Join-Path $env:RUNNER_TEMP 'BurnBar UI smoke profile'
+          $uiProfileDir = Join-Path $env:APPDATA 'BurnBar'
+          New-Item -ItemType Directory -Force $uiProfileDir | Out-Null
+          '{"popupBehaviorVersion":1,"startWithWindows":false,"popupSeconds":2,"checkUpdates":false}' | Set-Content (Join-Path $uiProfileDir 'config.json')
+          Add-Type @'
+          using System;
+          using System.Text;
+          using System.Runtime.InteropServices;
+          public class BurnBarUI {
+            [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr FindWindow(string cls, string title);
+            [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
+            [DllImport("user32.dll")] public static extern IntPtr GetDlgItem(IntPtr h, int id);
+            [DllImport("user32.dll", CharSet=CharSet.Unicode, EntryPoint="SendMessageW")] public static extern IntPtr ReadText(IntPtr h, uint m, IntPtr n, StringBuilder b);
+            [DllImport("user32.dll", CharSet=CharSet.Unicode)] public static extern IntPtr SendMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
+          }
+          '@
+          function Wait-Window([string]$title) {
+            for ($i=0; $i -lt 50; $i++) {
+              $h = [BurnBarUI]::FindWindow('BurnBarControls', $title)
+              if ($h -ne [IntPtr]::Zero) { return $h }
+              Start-Sleep -Milliseconds 100
+            }
+            throw "Window did not open: $title"
+          }
+          function Read-Control($h, [int]$id) {
+            $control = [BurnBarUI]::GetDlgItem($h, $id)
+            if ($control -eq [IntPtr]::Zero) { throw "Missing control $id" }
+            $text = [System.Text.StringBuilder]::new(4096)
+            [void][BurnBarUI]::ReadText($control, 0x0d, [IntPtr]$text.Capacity, $text)
+            return $text.ToString()
+          }
+          $process = Start-Process -PassThru bin/burnbar.exe -ArgumentList '-demo','-providers','both'
+          try {
+            $main = [IntPtr]::Zero
+            for ($i=0; $i -lt 50; $i++) {
+              $main = [BurnBarUI]::FindWindow('BurnBarMain', 'BurnBar')
+              if ($main -ne [IntPtr]::Zero) { break }
+              if ($process.HasExited) { throw 'Demo exited before creating its window' }
+              Start-Sleep -Milliseconds 100
+            }
+            if ($main -eq [IntPtr]::Zero) { throw 'Main window not found' }
+            [void][BurnBarUI]::PostMessage($main, 0x111, [IntPtr]12, [IntPtr]::Zero)
+            $settings = Wait-Window 'BurnBar settings'
+            $category = [BurnBarUI]::GetDlgItem($settings, 1000)
+            if ($category -eq [IntPtr]::Zero) { throw 'Settings category missing' }
+            [void][BurnBarUI]::SendMessage($category, 0x14e, [IntPtr]1, [IntPtr]::Zero)
+            [void][BurnBarUI]::PostMessage($settings, 0x111, [IntPtr]66536, $category)
+            [void][BurnBarUI]::PostMessage($settings, 0x111, [IntPtr]1012, [IntPtr]::Zero)
+            Start-Sleep -Milliseconds 300
+            $primary = Read-Control $settings 1008
+            $secondary = Read-Control $settings 1009
+            if ($primary -ne '50, 80, 95' -or $secondary -ne '50, 80, 95') { throw "Threshold preset mismatch: primary=$primary secondary=$secondary" }
+            [void][BurnBarUI]::PostMessage($settings, 0x111, [IntPtr]2, [IntPtr]::Zero)
+            Start-Sleep -Milliseconds 200
+            $config = Get-Content (Join-Path $uiProfileDir 'config.json') -Raw | ConvertFrom-Json
+            if ($null -ne $config.primaryThresholds) { throw 'Cancel saved draft thresholds' }
+            [void][BurnBarUI]::PostMessage($main, 0x111, [IntPtr]12, [IntPtr]::Zero)
+            $settings = Wait-Window 'BurnBar settings'
+            [void][BurnBarUI]::PostMessage($settings, 0x111, [IntPtr]1011, [IntPtr]::Zero)
+            [void][BurnBarUI]::PostMessage($settings, 0x111, [IntPtr]1, [IntPtr]::Zero)
+            Start-Sleep -Milliseconds 400
+            $config = Get-Content (Join-Path $uiProfileDir 'config.json') -Raw | ConvertFrom-Json
+            if (($config.primaryThresholds -join ',') -ne '25,50,75,100' -or ($config.secondaryThresholds -join ',') -ne '25,50,75,100') { throw 'Saved thresholds did not persist' }
+            [void][BurnBarUI]::PostMessage($main, 0x111, [IntPtr]13, [IntPtr]::Zero)
+            $readable = Wait-Window 'BurnBar readable usage'
+            $summary = Read-Control $readable 3001
+            if ($summary -notmatch 'Claude usage' -or $summary -notmatch 'Codex usage' -or $summary -notmatch '% used') { throw 'Readable summary missing provider usage' }
+            Start-Sleep -Seconds 4
+            if ([BurnBarUI]::FindWindow('BurnBarControls', 'BurnBar readable usage') -ne [IntPtr]::Zero) { throw 'Readable usage did not expire' }
+            if ($process.HasExited) { throw 'Demo crashed during smoke check' }
+          } finally {
+            if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
+          }
+
       - name: Publish GitHub release
         if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
