@@ -15,11 +15,11 @@ See how fast you're burning through your plan limits without leaving what you're
 
 [Features](#features) • [See it in action](#see-it-in-action) • [Installation](#installation) • [Build from source](#build-from-source)
 
-<img src="docs/images/tray-popup-dark.png" alt="BurnBar framed tray popup with Claude and Codex usage" width="410">
+<img src="docs/images/milestone-popup-dark.png" alt="BurnBar brief usage milestone notification" width="410">
 
 </div>
 
-Claude and Codex have session and longer-term plan limits. BurnBar keeps both providers in a compact tray-anchored card, warns you before you run out, and shows whether you're using them faster than the time
+Claude and Codex have session and longer-term plan limits. BurnBar keeps both providers in a tray-anchored card when you need it, warns you before you run out, and shows whether you're using them faster than the time
 window allows. Use both together, or select one from **Usage providers** in the right-click menu.
 Codex window lengths come from your account rather than assuming every plan uses the same limits.
 
@@ -29,17 +29,26 @@ Codex window lengths come from your account rather than assuming every plan uses
 
 ## Features
 
-- **Always-visible tray popup**: a rounded, framed card shows both providers above
-  the notification-area icon by default, with quota bars, pace markers and reset times.
-  It opens without stealing focus and follows light/dark theme and display scaling.
-- **Your choice**: uncheck **Always show popup** in the right-click menu for click-to-open
-  mode. Click the card for full details. Esc or clicking elsewhere collapses details
-  back to the persistent card, or closes it in click-only mode. The choice survives restarts.
-- **Fullscreen-aware**: the persistent card hides during fullscreen apps and returns
-  afterwards. It stays inside the monitor's work area and follows the tray icon.
+- **Brief milestone popups**: by default, a small framed card appears when either
+  provider's primary/session or secondary/weekly quota crosses **10%, 20%, … 100%**.
+  It shows the affected provider, takes no focus, and closes after **6 seconds**.
+  More updates do not keep extending it. Jumps show only the highest new milestone,
+  not a burst of every skipped threshold.
+- **Quiet by default**: first readings establish a baseline instead of replaying
+  old milestones. Saved per-window state avoids duplicates on refresh or restart;
+  quota resets rearm the tracker. Crossings are detected on the next successful
+  refresh, not continuously between API reads.
+- **Your choice**: click the tray icon any time to inspect usage; click an automatic
+  notice to keep it open and show details. Right-click → **Milestone popups (10% steps,
+  6 sec)** disables automatic cards for click-only use. **Always show popup (optional)**
+  restores a persistent overview if preferred. Esc or clicking elsewhere closes
+  manual views unless always-show is enabled.
+- **Fullscreen-aware**: no automatic popup appears over a fullscreen app, and missed
+  milestones are not queued to interrupt you afterwards. Cards follow light/dark
+  theme, DPI and the notification icon, and remain inside the monitor's work area.
 - **Optional taskbar meter**: enable **Show taskbar meter (optional)** for the rotating
   compact bars. Existing taskbar preferences are preserved when updating; new profiles
-  use the popup instead. Bars turn red at 90%.
+  use the tray and brief notices instead. Bars turn red at 90%.
 - **Pace marker**: a tick on each bar shows how much of the window's time has passed.
   A bar past its tick means you'll hit the limit before it resets.
 - **Details panel**: separate provider panels, reported quota windows, reset times, and independent
@@ -54,13 +63,17 @@ Codex window lengths come from your account rather than assuming every plan uses
 - **About**: right-click the meter or tray icon for the app version, developer credits,
   and a link to this repository.
 
+Existing installations using the previous always-visible default switch to the
+quieter milestone mode once on upgrade. You can opt back into always-show after
+updating; that explicit choice is retained. See [popup behavior](docs/POPUP_BEHAVIOR.md).
+
 ## See it in action
 
 <div align="center">
-<img src="docs/images/tray-popup-light.png" alt="BurnBar tray popup, light theme" width="400">
-<img src="docs/images/tray-popup-dark.png" alt="BurnBar tray popup, dark theme" width="400">
+<img src="docs/images/milestone-popup-light.png" alt="BurnBar milestone popup, light theme" width="400">
+<img src="docs/images/milestone-popup-dark.png" alt="BurnBar milestone popup, dark theme" width="400">
 <br>
-<sub>Rendered demo previews: the always-visible overview. Click for charts and full details.</sub>
+<sub>Rendered demo previews: a milestone notice that closes automatically. Click to inspect details.</sub>
 </div>
 
 <details>
@@ -79,7 +92,7 @@ You need Windows 10 or 11 and a signed-in provider:
   (`codex login`). API-key-only accounts do not provide these subscription usage limits.
   BurnBar also detects the CLI bundled with the Windows Codex desktop app when available.
 
-Both providers appear in the popup by default. A missing login affects only that provider. Select
+Both providers are available from the tray; automatic notices show the affected provider. A missing login affects only that provider. Select
 **Usage providers** from the right-click menu to hide a provider you don't use.
 
 ### Install or update with npx
@@ -192,6 +205,7 @@ internal/usage/       Claude usage client and Codex app-server account client
 internal/render/      drawing the meter, details panel, charts and tray icon
 internal/layout/      choosing a free spot on the taskbar
 internal/config/      settings and alert state
+internal/alerts/      milestone deduplication and popup lifetime
 internal/history/     usage history for the charts
 tools/genres/         icon and Windows resource generator
 assets/               app icon

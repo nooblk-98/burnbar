@@ -108,6 +108,10 @@ func writeSnapshots(dir string, demo bool, mode string) error {
 		card := render.TrayCard(1.25, readings, th)
 		imgs["tray-popup-"+name+".png"] = render.TrayBubble(card, 1.25, th, card.Rect.Dx()-35, false)
 		if len(readings) > 0 {
+			notice := render.TrayMilestoneCard(1.25, readings[:1], th, "Usage milestone · 10% crossed")
+			imgs["milestone-popup-"+name+".png"] = render.TrayBubble(notice, 1.25, th, notice.Rect.Dx()-35, false)
+		}
+		if len(readings) > 0 {
 			imgs["widget-narrow-"+name+".png"] = render.ProviderWidgetSized(1.25, readings[0], th, false, render.MinimumWidgetWidth(1.25))
 		}
 		if len(readings) > 1 {

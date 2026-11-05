@@ -3,11 +3,13 @@ package app
 import (
 	"fmt"
 	"image"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 	"unsafe"
 
+	"github.com/nooblk-98/burnbar/internal/alerts"
 	"github.com/nooblk-98/burnbar/internal/config"
 	"github.com/nooblk-98/burnbar/internal/history"
 	"github.com/nooblk-98/burnbar/internal/layout"
@@ -33,6 +35,7 @@ const (
 	timerActive   = 5 // deferred refresh for providers with session activity
 	timerRotate   = 6 // switch the compact meter to the next provider
 	timerFlip     = 7 // animate only while a flip is in progress
+	timerPopup    = 8 // auto-dismiss milestone notices
 
 	cmdDetails    = 1
 	cmdRefresh    = 2
@@ -44,6 +47,7 @@ const (
 	cmdRepository = 8
 	cmdExit       = 9
 	cmdAlwaysShow = 10
+	cmdMilestones = 11
 	cmdPosition   = 100 // + index into positions
 	cmdInterval   = 200 // + minutes
 	cmdProvider   = 300 // + index into providerModes
@@ -120,18 +124,21 @@ type app struct {
 	flipStarted    time.Time
 	flipPrevious   int
 
-	popupAnchor   RECT
-	popupWork     RECT
-	popupScale    float64
-	popupLight    bool
-	popupExpanded bool
-	popupBounds   RECT
-	popupVisible  bool
-	popupActive   bool // became the foreground window at least once since shown
-	popupHiddenAt time.Time
-	popupTB       uintptr
-	popupCenterX  int
-	popupMinute   int
+	popupLifetime  alerts.PopupLifetime
+	popupNotice    string
+	popupProviders map[usage.Provider]bool
+	popupAnchor    RECT
+	popupWork      RECT
+	popupScale     float64
+	popupLight     bool
+	popupExpanded  bool
+	popupBounds    RECT
+	popupVisible   bool
+	popupActive    bool // became the foreground window at least once since shown
+	popupHiddenAt  time.Time
+	popupTB        uintptr
+	popupCenterX   int
+	popupMinute    int
 
 	trayIcon       uintptr
 	trayAdded      bool
@@ -334,6 +341,7 @@ func (a *app) onUsage(p usage.Provider) {
 			a.hist[p].Add(u)
 		}
 		a.checkAlerts(u)
+		a.checkMilestones(u)
 	}
 	a.scheduleResetRefresh()
 	a.place(true)
@@ -587,6 +595,11 @@ func (a *app) paint(hwnd uintptr, img *image.RGBA, x, y int) {
 
 // togglePopup is called only from deferred UI work, never a shell callback.
 func (a *app) togglePopup(tb uintptr, centerX int) {
+	if a.popupLifetime.Automatic() {
+		a.popupTB = tb
+		a.showPopup(true) // inspecting a notice promotes it to a manual view
+		return
+	}
 	if a.cfg.AlwaysShowPopup {
 		a.popupExpanded = !a.popupExpanded
 		if a.popupVisible {
@@ -609,8 +622,14 @@ func (a *app) togglePopup(tb uintptr, centerX int) {
 }
 
 func (a *app) showPopup(activate bool) {
+	if activate {
+		a.manualPopup()
+	}
 	a.renderPopup()
-	a.popupVisible, a.popupActive = true, false
+	if !a.popupVisible {
+		a.popupActive = false
+	}
+	a.popupVisible = true
 	if activate {
 		pShowWindow.Call(a.popup, SW_SHOW)
 		pSetForegroundWindow.Call(a.popup)
@@ -620,6 +639,7 @@ func (a *app) showPopup(activate bool) {
 }
 
 func (a *app) hidePopup() {
+	a.manualPopup()
 	a.popupVisible = false // ShowWindow may synchronously deliver WM_ACTIVATE
 	a.popupHiddenAt = time.Now()
 	pShowWindow.Call(a.popup, SW_HIDE)
@@ -650,6 +670,58 @@ func (a *app) syncPopup() {
 	} else if a.popupVisible && a.popupChanged() {
 		a.renderPopup()
 	}
+}
+
+func (a *app) manualPopup() {
+	a.popupLifetime.Manual()
+	a.popupNotice = ""
+	a.popupProviders = nil
+	pKillTimer.Call(a.main, timerPopup)
+}
+
+func (a *app) expirePopup() {
+	// Ignore an already-queued timer after the user promotes a notice.
+	if !a.popupLifetime.Automatic() {
+		return
+	}
+	now := time.Now()
+	if a.popupLifetime.Due(now) {
+		a.hidePopup()
+	} else {
+		a.oneShot(timerPopup, a.popupLifetime.Remaining(now))
+	}
+}
+
+func (a *app) checkMilestones(u usage.Usage) {
+	events, changed := a.cfg.MilestoneState.Observe(u)
+	if changed && !a.demo {
+		a.cfg.Save()
+	}
+	if len(events) == 0 || !a.cfg.MilestonePopups || a.cfg.AlwaysShowPopup || fullscreenAppActive() {
+		return
+	}
+	// Never replace the view the user is inspecting.
+	if a.popupVisible && !a.popupLifetime.Automatic() {
+		return
+	}
+	tb := a.primaryTaskbar()
+	if tb == 0 {
+		return
+	}
+	a.popupTB = tb
+	if a.popupProviders == nil {
+		a.popupProviders = map[usage.Provider]bool{}
+	}
+	var notices []string
+	for _, event := range events {
+		a.popupProviders[event.Provider] = true
+		notices = append(notices, fmt.Sprintf("%s %s crossed %d%%", event.Provider.Name(), event.Label, event.Level))
+	}
+	a.popupNotice = strings.Join(notices, " · ")
+	a.popupExpanded = false
+	a.popupLifetime.Start(time.Now())
+	a.showPopup(false)
+	a.oneShot(timerPopup, a.popupLifetime.Remaining(time.Now()))
 }
 
 func (a *app) popupChanged() bool {
@@ -698,15 +770,26 @@ func (a *app) renderPopup() {
 	}
 	scale := float64(dpiForWindow(a.popupTB)) / 96
 	readings := a.snapshot()
-	var panels []render.Panel
-	for _, u := range readings {
-		panels = append(panels, render.Panel{Usage: u, History: a.hist[u.Provider].Since(time.Now().Add(-7 * 24 * time.Hour))})
+	if a.popupLifetime.Automatic() {
+		filtered := make([]usage.Usage, 0, len(readings))
+		for _, u := range readings {
+			if a.popupProviders[u.Provider] {
+				filtered = append(filtered, u)
+			}
+		}
+		readings = filtered
 	}
 	work, anchor := workArea(a.popupTB), a.trayAnchor()
 	th := render.NewTheme(systemUsesLightTheme())
 	var content *image.RGBA
 	if a.popupExpanded {
+		var panels []render.Panel
+		for _, u := range readings {
+			panels = append(panels, render.Panel{Usage: u, History: a.hist[u.Provider].Since(time.Now().Add(-7 * 24 * time.Hour))})
+		}
 		content = render.GroupPopup(scale, panels, th, int(work.Right-work.Left)-24, int(work.Bottom-work.Top)-24)
+	} else if a.popupLifetime.Automatic() {
+		content = render.TrayMilestoneCard(scale, readings, th, a.popupNotice)
 	} else {
 		content = render.TrayCard(scale, readings, th)
 	}
@@ -838,12 +921,13 @@ func (a *app) showMenuAt(pt POINT) {
 	}
 	add(menu, MF_POPUP, providerMenu, "Usage providers")
 	add(menu, MF_SEPARATOR, 0, "")
-	add(menu, MF_STRING|check(a.cfg.AlwaysShowPopup), cmdAlwaysShow, "Always show popup")
+	add(menu, MF_STRING|check(a.cfg.MilestonePopups), cmdMilestones, "Milestone popups (10% steps, 6 sec)")
+	add(menu, MF_STRING|check(a.cfg.AlwaysShowPopup), cmdAlwaysShow, "Always show popup (optional)")
 	add(menu, MF_STRING|check(a.cfg.ShowOverlay), cmdOverlay, "Show taskbar meter (optional)")
 	add(menu, MF_STRING|check(a.cfg.AllMonitors), cmdMonitors, "Show on all monitors")
 	add(menu, MF_POPUP, posMenu, "Position")
 	add(menu, MF_POPUP, intMenu, "Refresh interval")
-	add(menu, MF_STRING|check(a.cfg.Alerts), cmdAlerts, "Usage alerts (80% / 95% / reset)")
+	add(menu, MF_STRING|check(a.cfg.Alerts), cmdAlerts, "Windows alerts (80% / 95% / reset)")
 	add(menu, MF_STRING|check(startupEnabled()), cmdStartup, "Start with Windows")
 	add(menu, MF_SEPARATOR, 0, "")
 	add(menu, MF_STRING, cmdAbout, "About BurnBar...")
@@ -862,7 +946,13 @@ func (a *app) showMenuAt(pt POINT) {
 		a.popupTB = a.primaryTaskbar()
 		a.popupExpanded = true
 		a.showPopup(true)
+	case cmd == cmdMilestones:
+		a.cfg.MilestonePopups = !a.cfg.MilestonePopups
+		if !a.cfg.MilestonePopups && a.popupLifetime.Automatic() {
+			a.hidePopup()
+		}
 	case cmd == cmdAlwaysShow:
+		a.manualPopup()
 		a.cfg.AlwaysShowPopup = !a.cfg.AlwaysShowPopup
 		a.popupExpanded = false
 		if !a.cfg.AlwaysShowPopup {
@@ -922,6 +1012,8 @@ func mainProc(hwnd, msg, wparam, lparam uintptr) uintptr {
 	switch {
 	case msg == WM_TIMER:
 		switch wparam {
+		case timerPopup:
+			a.expirePopup()
 		case timerLayout:
 			a.place(false)
 			a.syncPopup()
@@ -1058,6 +1150,7 @@ func popupProc(hwnd, msg, wparam, lparam uintptr) uintptr {
 		}
 		return 0
 	case WM_LBUTTONUP:
+		a.manualPopup()
 		if !a.popupExpanded {
 			a.popupExpanded = true
 			a.renderPopup()

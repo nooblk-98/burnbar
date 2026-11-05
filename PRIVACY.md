@@ -73,7 +73,7 @@ BurnBar stores its files under `%APPDATA%\BurnBar\`:
 
 | File | Contents |
 | --- | --- |
-| `config.json` | Provider selection, startup preference, taskbar/display settings, refresh interval, and alert state, including quota percentages and reset timestamps |
+| `config.json` | Provider selection, startup preference, taskbar/display settings, refresh interval, and alert state, including quota percentages, reset timestamps, and milestone high-water levels/window durations used to avoid duplicate popup notifications |
 | `history.jsonl` | Claude session and weekly percentages with timestamps |
 | `history-codex.jsonl` | Codex primary and secondary percentages with timestamps |
 

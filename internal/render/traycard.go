@@ -13,14 +13,31 @@ import (
 
 // TrayCard is the small persistent overview; the full charts remain a click away.
 func TrayCard(scale float64, readings []usage.Usage, th Theme) *image.RGBA {
+	return trayCard(scale, readings, th, "")
+}
+
+func TrayMilestoneCard(scale float64, readings []usage.Usage, th Theme, notice string) *image.RGBA {
+	return trayCard(scale, readings, th, notice)
+}
+
+func trayCard(scale float64, readings []usage.Usage, th Theme, notice string) *image.RGBA {
+	noticeFace := faceFor(11*scale, true)
+	lines := wrapText(noticeFace, notice, 292*scale)
+	if len(lines) > 2 {
+		lines = lines[:2]
+	}
+	header := float64(len(lines) * 16)
 	w := int(math.Round(320 * scale))
-	h := int(math.Round(float64(30+len(readings)*94) * scale))
+	h := int(math.Round((float64(30+len(readings)*94) + header) * scale))
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
 	fillRoundRect(img, 0, 0, float64(w), float64(h), 10*scale, th.border)
 	fillRoundRect(img, 1, 1, float64(w)-1, float64(h)-1, 10*scale-1, th.bg)
 	title, body, small := faceFor(12*scale, true), faceFor(11*scale, true), faceFor(10*scale, false)
+	for i, line := range lines {
+		drawText(img, noticeFace, line, 14*scale, float64(18+i*16)*scale, th.text)
+	}
 	for i, u := range readings {
-		y := float64(20+i*94) * scale
+		y := (float64(20+i*94) + header) * scale
 		drawText(img, title, u.Name(), 14*scale, y, th.text)
 		if u.Err != "" {
 			status := "Unavailable"
@@ -45,7 +62,11 @@ func TrayCard(scale float64, readings []usage.Usage, th Theme) *image.RGBA {
 			}
 		}
 	}
-	drawText(img, small, "Click for details · right-click for options", 14*scale, float64(h)-11*scale, th.sub)
+	footer := "Click for details · right-click for options"
+	if notice != "" {
+		footer = "Auto closes · click to keep open"
+	}
+	drawText(img, small, footer, 14*scale, float64(h)-11*scale, th.sub)
 	return img
 }
 
