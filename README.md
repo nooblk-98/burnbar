@@ -31,16 +31,26 @@ Codex window lengths come from your account rather than assuming every plan uses
 
 - **Brief milestone popups**: by default, a small framed card appears when either
   provider's primary/session or secondary/weekly quota crosses **10%, 20%, … 100%**.
-  It shows the affected provider, takes no focus, and closes after the selected delay (**6 seconds** by default).
+  It shows only affected quotas by default, takes no focus, and closes after the selected delay (**6 seconds** by default).
   More updates do not keep extending it. Jumps show only the highest new milestone,
   not a burst of every skipped threshold.
+- **Notification preferences**: independent session/weekly thresholds (10% or 25%
+  presets, or custom values), snooze, local quiet hours, compact/full/native notice
+  styles and Windows shell/Focus suppression. Manual inspection stays available.
+- **Native settings and readable usage**: one settings window; keyboard controls,
+  optional Ctrl+Alt+B shortcut, a screen-reader-friendly text view, high-contrast
+  system colours and configurable popup theme/text size.
+- **Freshness and forecasts**: visible update age/error status; optional recent-pace
+  time-to-limit estimates in details when enough reliable history exists.
+- **Stable update checks**: public GitHub release metadata, release-notes links and
+  a copyable update command. No automatic installation.
 - **Quiet by default**: first readings establish a baseline instead of replaying
   old milestones. Saved per-window state avoids duplicates on refresh or restart;
-  quota resets rearm the tracker. Crossings are detected on the next successful
+  quota resets rearm the tracker. Threshold lists and notice style are configurable in Settings. Crossings are detected on the next successful
   refresh, not continuously between API reads.
 - **Your choice**: click the tray icon any time to inspect usage; click an automatic
   notice for details. Manual popups also close after the selected delay; clicks restart
-  their timer. Right-click → **Milestone popups (10% steps)** disables automatic
+  their timer. Right-click → **Automatic usage milestones** disables automatic
   cards for click-only use. **Always show popup (optional)**
   restores a persistent overview if preferred. Esc or clicking elsewhere closes
   manual views unless always-show is enabled.
@@ -53,7 +63,7 @@ Codex window lengths come from your account rather than assuming every plan uses
 - **No tooltip overlap**: the native tray tooltip is hidden while a popup is visible
   and restored once it closes.
 - **Pace marker**: a tick on each bar shows how much of the window's time has passed.
-  A bar past its tick means you'll hit the limit before it resets.
+  A bar past its tick means usage is ahead of an even pace; future usage may change.
 - **Details panel**: separate provider panels, reported quota windows, reset times, and independent
   24-hour and 7-day history charts. Claude also shows this week's usage by product when available.
 - **Alerts**: Windows notifications at 80% and 95%, and when a limit you'd been close to resets.
@@ -69,7 +79,7 @@ Codex window lengths come from your account rather than assuming every plan uses
 
 Existing installations using the previous always-visible default switch to the
 quieter milestone mode once on upgrade. You can opt back into always-show after
-updating; that explicit choice is retained. See [popup behavior](docs/POPUP_BEHAVIOR.md).
+updating; that explicit choice is retained. See [popup behavior](docs/POPUP_BEHAVIOR.md) and the [settings guide](docs/SETTINGS.md).
 
 ## See it in action
 
@@ -196,7 +206,9 @@ internal/usage/       Claude usage client and Codex app-server account client
 internal/render/      drawing the meter, details panel, charts and tray icon
 internal/layout/      popup placement and fullscreen visibility
 internal/config/      settings and alert state
-internal/alerts/      milestone deduplication and popup lifetime
+internal/alerts/      custom milestones, quiet-hour policy and popup lifetime
+internal/insights/    local data health and conservative recent-pace estimates
+internal/updates/     public stable-release checks (no automatic installation)
 internal/history/     usage history for the charts
 tools/genres/         icon and Windows resource generator
 assets/               app icon

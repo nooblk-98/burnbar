@@ -14,12 +14,14 @@ import (
 	"github.com/nooblk-98/burnbar/internal/history"
 	"github.com/nooblk-98/burnbar/internal/layout"
 	"github.com/nooblk-98/burnbar/internal/render"
+	"github.com/nooblk-98/burnbar/internal/updates"
 	"github.com/nooblk-98/burnbar/internal/usage"
 
 	"golang.org/x/sys/windows/registry"
 )
 
 const (
+	msgUpdate     = WM_APP + 8
 	msgUsage      = WM_APP + 1 // background fetch finished
 	msgTray       = WM_APP + 2 // notification-area icon callback
 	msgMenu       = WM_APP + 3 // popup asks for the context menu
@@ -33,19 +35,25 @@ const (
 	timerActive      = 5 // deferred refresh for providers with session activity
 	timerPopup       = 8 // auto-dismiss milestone notices
 
-	cmdDetails    = 1
-	cmdRefresh    = 2
-	cmdAlerts     = 5
-	cmdStartup    = 6
-	cmdAbout      = 7
-	cmdRepository = 8
-	cmdExit       = 9
-	cmdAlwaysShow = 10
-	cmdMilestones = 11
-	cmdPopupDelay = 400 // + seconds
-	cmdInterval   = 200 // + minutes
-	cmdProvider   = 300 // + index into providerModes
-	activeMinGap  = 60 * time.Second
+	cmdSettings       = 12
+	cmdAccessible     = 13
+	cmdSnooze30       = 14
+	cmdSnooze60       = 15
+	cmdSnoozeTomorrow = 16
+	cmdResume         = 17
+	cmdDetails        = 1
+	cmdRefresh        = 2
+	cmdAlerts         = 5
+	cmdStartup        = 6
+	cmdAbout          = 7
+	cmdRepository     = 8
+	cmdExit           = 9
+	cmdAlwaysShow     = 10
+	cmdMilestones     = 11
+	cmdPopupDelay     = 400 // + seconds
+	cmdInterval       = 200 // + minutes
+	cmdProvider       = 300 // + index into providerModes
+	activeMinGap      = 60 * time.Second
 
 	runKey         = `Software\Microsoft\Windows\CurrentVersion\Run`
 	runValue       = "BurnBar"
@@ -59,6 +67,17 @@ var (
 )
 
 type app struct {
+	settings, accessible          *nativeWindow
+	accessibleDeadline            time.Time
+	popupEvents                   []alerts.Milestone
+	popupTheme                    render.Theme
+	updateBusy                    bool
+	lastUpdateCheck               time.Time
+	latestRelease, pendingRelease updates.Release
+	pendingUpdateError            error
+	updateError, updateNotified   string
+	focus                         *focusReader
+
 	demo    bool
 	version string
 	cfg     config.Config
@@ -147,8 +166,11 @@ func (a *app) run() error {
 	for _, c := range []struct {
 		name string
 		proc uintptr
-	}{{"BurnBarMain", mainProcCB}, {"BurnBarPopup", popupProcCB}} {
+	}{{"BurnBarMain", mainProcCB}, {"BurnBarPopup", popupProcCB}, {"BurnBarControls", controlsProcCB}} {
 		wc := WNDCLASSEXW{LpfnWndProc: c.proc, HInstance: a.hinst, HCursor: cursor, HIcon: icon, LpszClassName: utf16(c.name)}
+		if c.name == "BurnBarControls" {
+			wc.HbrBackground = 16
+		}
 		wc.CbSize = uint32(unsafe.Sizeof(wc))
 		if r, _, err := pRegisterClassExW.Call(uintptr(unsafe.Pointer(&wc))); r == 0 {
 			return fmt.Errorf("RegisterClassEx %s: %v", c.name, err)
@@ -165,6 +187,16 @@ func (a *app) run() error {
 		return fmt.Errorf("could not create windows")
 	}
 
+	a.focus = newFocusReader()
+	defer a.focus.close()
+	if a.cfg.Hotkey {
+		if err := a.registerHotkey(); err != nil {
+			a.showMessage("BurnBar shortcut", err.Error())
+		}
+	}
+	defer pUnregisterHotKey.Call(a.main, hotkeyID)
+	defer closeNative(&a.settings)
+	defer closeNative(&a.accessible)
 	startupErr := a.initializeStartup()
 	r, _, _ := pRegisterWindowMessageW.Call(uintptr(unsafe.Pointer(utf16("TaskbarCreated"))))
 	a.taskbarCreated = uint32(r)
@@ -183,12 +215,16 @@ func (a *app) run() error {
 	a.refresh(true)
 	pSetTimer.Call(a.main, timerPopupLayout, 1000, 0)
 	a.setRefreshTimer()
+	a.checkUpdates(false)
 
 	var m MSG
 	for {
 		r, _, _ := pGetMessageW.Call(uintptr(unsafe.Pointer(&m)), 0, 0, 0)
 		if int32(r) <= 0 {
 			break
+		}
+		if a.dialogMessage(&m) {
+			continue
 		}
 		pTranslateMessage.Call(uintptr(unsafe.Pointer(&m)))
 		pDispatchMessageW.Call(uintptr(unsafe.Pointer(&m)))
@@ -279,6 +315,7 @@ func (a *app) onUsage(p usage.Provider) {
 		a.checkMilestones(u)
 	}
 	a.scheduleResetRefresh()
+	a.updateAccessible()
 	a.updateTray()
 	if a.popupVisible {
 		a.renderPopup()
@@ -319,7 +356,7 @@ func (a *app) checkAlerts(u usage.Usage) {
 		if seen && prev.ResetsAt == cycle {
 			cur.Level = prev.Level
 		}
-		if seen && prev.ResetsAt != cycle && prev.Level > 0 && w.Percent < prev.Percent && a.cfg.Alerts {
+		if seen && prev.ResetsAt != cycle && prev.Level > 0 && w.Percent < prev.Percent && a.cfg.Alerts && !a.automaticSuppressed() {
 			a.notify(u.Name()+" "+w.Label+" limit has reset", fmt.Sprintf("You're back to %.0f%% used.", w.Percent), false)
 		}
 		level := 0
@@ -329,7 +366,7 @@ func (a *app) checkAlerts(u usage.Usage) {
 			level = 80
 		}
 		if level > cur.Level {
-			if a.cfg.Alerts {
+			if a.cfg.Alerts && !a.automaticSuppressed() {
 				a.notify(fmt.Sprintf("%s %s at %.0f%%", u.Name(), w.Label, w.Percent), render.ResetText(w.ResetsAt), true)
 			}
 			cur.Level = level
@@ -458,13 +495,13 @@ func (a *app) hidePopup() {
 // syncPopup restores a persistent card without stealing focus after fullscreen,
 // Explorer restart, theme/DPI changes, or moving the notification icon.
 func (a *app) syncPopup() {
-	if fullscreenAppActive() {
+	if fullscreenAppActive() || a.cfg.AlwaysShowPopup && a.popupLifetime.Deadline.IsZero() && a.automaticSuppressed() || a.popupLifetime.Automatic() && a.automaticSuppressed() {
 		if a.popupVisible {
 			a.hidePopup()
 		}
 		return
 	}
-	if a.cfg.AlwaysShowPopup {
+	if a.cfg.AlwaysShowPopup && a.settings == nil && a.accessible == nil {
 		a.popupTB = a.primaryTaskbar()
 		if a.popupTB == 0 {
 			if a.popupVisible {
@@ -484,6 +521,7 @@ func (a *app) syncPopup() {
 
 func (a *app) clearPopup() {
 	a.popupLifetime.Clear()
+	a.popupEvents = nil
 	a.popupNotice = ""
 	a.popupProviders = nil
 	pKillTimer.Call(a.main, timerPopup)
@@ -514,11 +552,22 @@ func (a *app) expirePopup() {
 }
 
 func (a *app) checkMilestones(u usage.Usage) {
-	events, changed := a.cfg.MilestoneState.Observe(u)
+	events, changed := a.cfg.MilestoneState.ObserveThresholds(u, a.cfg.PrimaryThresholds, a.cfg.SecondaryThresholds)
 	if changed && !a.demo {
 		a.cfg.Save()
 	}
-	if len(events) == 0 || !a.cfg.MilestonePopups || a.cfg.AlwaysShowPopup || fullscreenAppActive() {
+	if len(events) == 0 || !a.cfg.MilestonePopups || a.cfg.AlwaysShowPopup || a.automaticSuppressed() {
+		return
+	}
+	if a.settings != nil || a.accessible != nil {
+		return
+	}
+	if a.cfg.NativeNotices {
+		var lines []string
+		for _, e := range events {
+			lines = append(lines, fmt.Sprintf("%s %s: %.0f%% used (%d%% crossed). %s", e.Provider.Name(), e.Label, e.Percent, e.Level, render.ResetText(e.ResetsAt)))
+		}
+		a.notify("BurnBar usage milestone", strings.Join(lines, "\n"), false)
 		return
 	}
 	// Never replace the view the user is inspecting.
@@ -539,6 +588,7 @@ func (a *app) checkMilestones(u usage.Usage) {
 		notices = append(notices, fmt.Sprintf("%s %s crossed %d%%", event.Provider.Name(), event.Label, event.Level))
 	}
 	a.popupNotice = strings.Join(notices, " · ")
+	a.popupEvents = events
 	a.popupExpanded = false
 	a.popupLifetime.StartAutomatic(time.Now(), a.popupDelay())
 	a.showPopup(false)
@@ -547,7 +597,7 @@ func (a *app) checkMilestones(u usage.Usage) {
 
 func (a *app) popupChanged() bool {
 	return a.popupAnchor != a.trayAnchor() || a.popupWork != workArea(a.popupTB) ||
-		a.popupScale != float64(dpiForWindow(a.popupTB))/96 || a.popupLight != systemUsesLightTheme() ||
+		a.popupScale != a.renderScale() || a.popupTheme != a.theme() ||
 		a.popupMinute != time.Now().Minute()
 }
 
@@ -590,7 +640,7 @@ func (a *app) renderPopup() {
 	if a.popupTB == 0 {
 		return
 	}
-	scale := float64(dpiForWindow(a.popupTB)) / 96
+	scale := a.renderScale()
 	readings := a.snapshot()
 	if a.popupLifetime.Automatic() {
 		filtered := make([]usage.Usage, 0, len(readings))
@@ -602,20 +652,22 @@ func (a *app) renderPopup() {
 		readings = filtered
 	}
 	work, anchor := workArea(a.popupTB), a.trayAnchor()
-	th := render.NewTheme(systemUsesLightTheme())
+	th := a.theme()
 	var content *image.RGBA
 	if a.popupExpanded {
 		var panels []render.Panel
 		for _, u := range readings {
-			panels = append(panels, render.Panel{Usage: u, History: a.hist[u.Provider].Since(time.Now().Add(-7 * 24 * time.Hour))})
+			panels = append(panels, render.Panel{Usage: u, History: a.hist[u.Provider].Since(time.Now().Add(-7 * 24 * time.Hour)), ShowForecast: a.cfg.ShowForecast, StaleAfter: a.staleAfter()})
 		}
 		content = render.GroupPopup(scale, panels, th, int(work.Right-work.Left)-24, int(work.Bottom-work.Top)-24)
+	} else if a.popupLifetime.Automatic() && a.cfg.CompactNotices {
+		content = render.CompactNotice(scale, a.popupEvents, th)
 	} else if a.popupLifetime.Automatic() {
 		content = render.TrayMilestoneCard(scale, readings, th, a.popupNotice)
 	} else if a.cfg.AlwaysShowPopup {
-		content = render.TrayPinnedCard(scale, readings, th)
+		content = render.TrayPinnedStatusCard(scale, readings, th, a.staleAfter())
 	} else {
-		content = render.TrayCard(scale, readings, th)
+		content = render.TrayStatusCard(scale, readings, th, a.staleAfter())
 	}
 	maxW, maxH := int(work.Right-work.Left), int(work.Bottom-work.Top)
 	if maxW <= 0 || maxH <= 0 {
@@ -632,6 +684,7 @@ func (a *app) renderPopup() {
 	a.paint(a.popup, img, int(bounds.Left), int(bounds.Top))
 	a.popupAnchor, a.popupWork = anchor, work
 	a.popupScale, a.popupLight = scale, systemUsesLightTheme()
+	a.popupTheme = th
 	a.popupMinute = time.Now().Minute()
 }
 
@@ -666,7 +719,7 @@ func (a *app) updateTray() {
 		}
 	}
 	u := a.snapshot()
-	icon := makeIcon(render.GroupTrayIcon(size, u, systemUsesLightTheme()))
+	icon := makeIcon(render.GroupTrayIconTheme(size, u, a.theme()))
 
 	nid := NOTIFYICONDATAW{HWnd: a.main, UID: 1, UFlags: NIF_MESSAGE | NIF_ICON, UCallbackMessage: msgTray, HIcon: icon}
 	nid.CbSize = uint32(unsafe.Sizeof(nid))
@@ -756,6 +809,20 @@ func (a *app) showMenuAt(pt POINT) {
 		add(menu, MF_STRING|MF_GRAYED, 0, status)
 	}
 	add(menu, MF_SEPARATOR, 0, "")
+	add(menu, MF_STRING, cmdSettings, "Settings...")
+	add(menu, MF_STRING, cmdAccessible, "Readable usage (F6)")
+	if a.latestRelease.Version != "" {
+		add(menu, MF_STRING|MF_GRAYED, 0, a.updateStatus())
+	}
+	snoozeMenu, _, _ := pCreatePopupMenu.Call()
+	add(snoozeMenu, MF_STRING, cmdSnooze30, "30 minutes")
+	add(snoozeMenu, MF_STRING, cmdSnooze60, "1 hour")
+	add(snoozeMenu, MF_STRING, cmdSnoozeTomorrow, "Until tomorrow at 08:00")
+	add(snoozeMenu, MF_STRING, cmdResume, "Resume automatic notices")
+	add(menu, MF_POPUP, snoozeMenu, "Snooze automatic notices")
+	if a.cfg.SnoozeUntil > time.Now().Unix() {
+		add(menu, MF_STRING|MF_GRAYED, 0, "Snoozed until "+time.Unix(a.cfg.SnoozeUntil, 0).Format("Mon 15:04"))
+	}
 	add(menu, MF_STRING, cmdDetails, "Show details")
 	add(menu, MF_STRING, cmdRefresh, "Refresh now")
 	providerMenu, _, _ := pCreatePopupMenu.Call()
@@ -764,7 +831,7 @@ func (a *app) showMenuAt(pt POINT) {
 	}
 	add(menu, MF_POPUP, providerMenu, "Usage providers")
 	add(menu, MF_SEPARATOR, 0, "")
-	add(menu, MF_STRING|check(a.cfg.MilestonePopups), cmdMilestones, "Milestone popups (10% steps)")
+	add(menu, MF_STRING|check(a.cfg.MilestonePopups), cmdMilestones, "Automatic usage milestones")
 	add(menu, MF_STRING|check(a.cfg.AlwaysShowPopup), cmdAlwaysShow, "Always show popup (optional)")
 	delayMenu, _, _ := pCreatePopupMenu.Call()
 	for _, seconds := range popupDelays {
@@ -786,6 +853,20 @@ func (a *app) showMenuAt(pt POINT) {
 	pPostMessageW.Call(a.main, WM_NULL, 0, 0)
 
 	switch {
+	case cmd == cmdSettings:
+		a.showSettings()
+		return
+	case cmd == cmdAccessible:
+		a.showAccessible()
+		return
+	case cmd == cmdSnooze30:
+		a.snooze(30)
+	case cmd == cmdSnooze60:
+		a.snooze(60)
+	case cmd == cmdSnoozeTomorrow:
+		a.snooze(-1)
+	case cmd == cmdResume:
+		a.snooze(0)
 	case cmd == cmdDetails:
 		a.popupHiddenAt = time.Time{}
 		a.popupTB = a.primaryTaskbar()
@@ -862,6 +943,11 @@ func mainProc(hwnd, msg, wparam, lparam uintptr) uintptr {
 		case timerPopup:
 			a.expirePopup()
 		case timerPopupLayout:
+			if a.accessible != nil && !time.Now().Before(a.accessibleDeadline) {
+				closeNative(&a.accessible)
+			}
+			a.checkUpdates(false)
+			a.updateAccessible()
 			a.syncPopup()
 		case timerRefresh:
 			a.refresh(false)
@@ -871,6 +957,22 @@ func mainProc(hwnd, msg, wparam, lparam uintptr) uintptr {
 		case timerActive:
 			a.refreshActivity()
 		}
+		return 0
+	case msg == wmCommand:
+		if wparam&0xffff == cmdSettings {
+			a.showSettings()
+		}
+		if wparam&0xffff == cmdAccessible {
+			a.showAccessible()
+		}
+		return 0
+	case msg == wmHotkey:
+		if wparam == hotkeyID {
+			a.showAccessible()
+		}
+		return 0
+	case msg == msgUpdate:
+		a.onUpdate()
 		return 0
 	case msg == msgUsage:
 		a.onUsage(providerFromID(wparam))
@@ -927,8 +1029,22 @@ func popupProc(hwnd, msg, wparam, lparam uintptr) uintptr {
 		}
 		return 0
 	case WM_KEYDOWN:
-		if wparam == VK_ESCAPE {
+		switch wparam {
+		case VK_ESCAPE:
 			a.dismissPopup()
+		case 0x0d, 0x20:
+			a.manualPopup()
+			a.popupExpanded = true
+			a.showPopup(true)
+		case 'R':
+			a.manualPopup()
+			a.refresh(true)
+		case 'S':
+			a.showSettings()
+		case 0x75, 0x09:
+			a.showAccessible() // F6 / Tab: native readable view
+		case 0x5d:
+			pPostMessageW.Call(a.main, msgMenu, 0, 0)
 		}
 		return 0
 	case WM_LBUTTONUP:

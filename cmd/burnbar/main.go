@@ -5,12 +5,14 @@ import (
 	"flag"
 	"fmt"
 	"image"
+	"image/color"
 	"image/png"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/nooblk-98/burnbar/internal/alerts"
 	"github.com/nooblk-98/burnbar/internal/app"
 	"github.com/nooblk-98/burnbar/internal/config"
 	"github.com/nooblk-98/burnbar/internal/history"
@@ -87,16 +89,18 @@ func writeSnapshots(dir string, demo bool, mode string) error {
 			u, hist = usage.FetchProvider(p), history.LoadProvider(config.Dir(), p)
 		}
 		readings = append(readings, u)
-		panels = append(panels, render.Panel{Usage: u, History: hist.Since(time.Now().Add(-7 * 24 * time.Hour))})
+		panels = append(panels, render.Panel{Usage: u, ShowForecast: true, History: hist.Since(time.Now().Add(-7 * 24 * time.Hour))})
 	}
-	for _, light := range []bool{false, true} {
-		name := map[bool]string{false: "dark", true: "light"}[light]
-		th := render.NewTheme(light)
+	for _, theme := range []struct {
+		name  string
+		theme render.Theme
+	}{{"dark", render.NewTheme(false)}, {"light", render.NewTheme(true)}, {"high-contrast", render.HighContrastTheme(color.NRGBA{A: 255}, color.NRGBA{R: 255, G: 255, B: 255, A: 255}, color.NRGBA{R: 255, G: 255, A: 255})}} {
+		name, th := theme.name, theme.theme
 		imgs := map[string]*image.RGBA{"popup-" + name + ".png": render.GroupPopup(1.25, panels, th, 1400, 1000)}
 		card := render.TrayCard(1.25, readings, th)
 		imgs["tray-popup-"+name+".png"] = render.TrayBubble(card, 1.25, th, card.Rect.Dx()-35, false)
 		if len(readings) > 0 {
-			notice := render.TrayMilestoneCard(1.25, readings[:1], th, "Usage milestone · 10% crossed")
+			notice := render.CompactNotice(1.25, []alerts.Milestone{{Provider: readings[0].Provider, Label: "5h", Level: 60, Percent: 62, ResetsAt: readings[0].FiveHour.ResetsAt}}, th)
 			imgs["milestone-popup-"+name+".png"] = render.TrayBubble(notice, 1.25, th, notice.Rect.Dx()-35, false)
 		}
 		for file, img := range imgs {

@@ -9,7 +9,10 @@ there are no promised release dates.
 
 - Claude and Codex quota windows, reset times, and usage history.
 - Brief milestone notices, configurable popup timers, alerts, and a details panel.
-- Light/dark themes, display scaling, tray anchoring and work-area clamping.
+- Light/dark/high-contrast themes, text size, display scaling and work-area clamping.
+- Custom session/weekly thresholds, snooze, quiet hours and compact/native notices.
+- Native settings, keyboard shortcuts and readable usage for assistive technology.
+- Visible freshness, cautious pace forecasts and user-controlled stable update checks.
 
 ## Next priorities
 
