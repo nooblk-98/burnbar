@@ -9,7 +9,7 @@ const help = `BurnBar installer ${pkg.version}
 
 Usage: burnbar [install|update] [options]
   --channel stable|development  Release channel (default: matches installer package)
-  --install-dir <directory>     Override %LOCALAPPDATA%\\Programs\\BurnBar
+  --install-dir <directory>     Override Windows install folder or macOS app parent folder
   --no-start                    Install without launching BurnBar
   --dry-run                     Check release metadata without modifying the installation
   --help                        Show this help
@@ -17,7 +17,7 @@ Usage: burnbar [install|update] [options]
 
 Install and update use the same verified replacement process. Switching channels
 replaces the executable but preserves your settings and history.
-Requires Windows x64 (or x64 emulation), Node.js 22+, and Windows PowerShell 5.1.
+Requires Node.js 22+. Windows: PowerShell 5.1. macOS preview: macOS 15+, Apple Silicon or Intel.
 `;
 
 function parseArgs(args) {
@@ -71,7 +71,8 @@ function main(args = process.argv.slice(2), runtime = { platform: process.platfo
     const options = parseArgs(args);
     if (options.help) { console.log(help); return 0; }
     if (options.version) { console.log(pkg.version); return 0; }
-    if (runtime.platform !== 'win32') throw new Error('BurnBar requires Windows. No files were installed.');
+    if (runtime.platform === 'darwin') { return require('../macos/install.cjs').install(options).then(() => 0).catch(error => { console.error(`BurnBar: ${error.message}`); return 1; }); }
+    if (runtime.platform !== 'win32') throw new Error('BurnBar requires Windows or macOS. No files were installed.');
     const { executable, args: psArgs } = invocation(options, runtime.env);
     // PowerShell 7 can pass its incompatible module search path to Windows
     // PowerShell 5.1 (e.g. when npx is launched from pwsh). Let 5.1 construct
@@ -91,5 +92,5 @@ function main(args = process.argv.slice(2), runtime = { platform: process.platfo
   }
 }
 
-if (require.main === module) process.exitCode = main();
+if (require.main === module) Promise.resolve(main()).then(code => { process.exitCode = code; });
 module.exports = { parseArgs, invocation, main };

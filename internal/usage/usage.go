@@ -84,9 +84,9 @@ func credentialsPath() string { return filepath.Join(ClaudeDir(), ".credentials.
 // readToken returns the OAuth access token Claude Code stores after `claude` login.
 // BurnBar only reads it; Claude Code itself refreshes it when it runs.
 func readToken() (string, error) {
-	b, err := os.ReadFile(credentialsPath())
+	b, err := claudeCredentials()
 	if err != nil {
-		return "", fmt.Errorf("no Claude Code login found (%s)", credentialsPath())
+		return "", fmt.Errorf("Claude Code login unavailable: %w", err)
 	}
 	var c struct {
 		ClaudeAiOauth struct {

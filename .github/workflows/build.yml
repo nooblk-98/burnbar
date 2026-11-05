@@ -13,7 +13,53 @@ permissions:
   contents: read
 
 jobs:
+  macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: amd64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - name: Build native macOS preview
+        env:
+          MACOSX_DEPLOYMENT_TARGET: '15.0'
+        run: |
+          version=0.0.0-dev
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then version="${GITHUB_REF_NAME#v}"; fi
+          if [[ "$GITHUB_REF" == refs/heads/development ]]; then version="0.0.0-dev.$GITHUB_RUN_NUMBER.$GITHUB_RUN_ATTEMPT"; fi
+          go vet ./...
+          bash scripts/build-macos.sh "$version"
+          codesign --verify --deep --strict dist/BurnBar.app
+          dist/BurnBar.app/Contents/MacOS/burnbar -demo -once -providers both
+      - name: Native macOS UI smoke (synthetic, isolated profile)
+        timeout-minutes: 2
+        run: |
+          export APPDATA="$RUNNER_TEMP/BurnBar-macOS-smoke"
+          export BURNBAR_MACOS_SMOKE=1
+          dist/BurnBar.app/Contents/MacOS/burnbar -demo -providers both
+          node -e 'const fs=require("fs"),path=require("path");const c=JSON.parse(fs.readFileSync(path.join(process.env.APPDATA,"BurnBar","config.json")));if(c.primaryThresholds.join(",")!=="25,50,75,100"||c.popupSeconds!==2)throw Error("Saved preferences missing")'
+      - uses: actions/upload-artifact@v7
+        with:
+          name: macos-${{ matrix.arch }}
+          path: |
+            dist/burnbar-macos-${{ matrix.arch }}.zip
+            dist/burnbar-macos-${{ matrix.arch }}.zip.sha256
+          if-no-files-found: error
+
   build:
+    needs: macos
     runs-on: windows-latest
     permissions:
       contents: write
@@ -167,6 +213,12 @@ jobs:
             if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
           }
 
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: macos-*
+          path: bin
+          merge-multiple: true
+
       - name: Publish GitHub release
         if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
@@ -182,7 +234,7 @@ jobs:
           "@ | Out-File -Encoding utf8 notes.md
           $extra = @()
           if ($env:GITHUB_REF_NAME.Contains("-")) { $extra = @("--prerelease") }
-          gh release create "$env:GITHUB_REF_NAME" bin/burnbar.exe bin/burnbar.exe.sha256 `
+          gh release create "$env:GITHUB_REF_NAME" bin/burnbar.exe bin/burnbar.exe.sha256 bin/burnbar-macos-*.zip bin/burnbar-macos-*.zip.sha256 `
             --repo "$env:GITHUB_REPOSITORY" --verify-tag --title "BurnBar $env:GITHUB_REF_NAME" `
             --generate-notes --notes-file notes.md @extra
 
@@ -219,7 +271,7 @@ jobs:
           $tag = "dev-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
           $hash = (Get-FileHash bin/burnbar.exe -Algorithm SHA256).Hash.ToLower()
           "$hash  burnbar.exe" | Out-File -Encoding ascii bin/burnbar.exe.sha256
-          gh release create $tag bin/burnbar.exe bin/burnbar.exe.sha256 `
+          gh release create $tag bin/burnbar.exe bin/burnbar.exe.sha256 bin/burnbar-macos-*.zip bin/burnbar-macos-*.zip.sha256 `
             --repo "$env:GITHUB_REPOSITORY" --target "$env:GITHUB_SHA" --prerelease --latest=false `
             --title "BurnBar development ${{ steps.version.outputs.version }}" `
             --notes "Unreleased development build from $env:GITHUB_SHA. Unsigned. May contain bugs."
