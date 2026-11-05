@@ -3,11 +3,25 @@
   "version": "0.0.0",
   "description": "Install or update the BurnBar Windows taskbar usage meter",
   "license": "MIT",
-  "repository": { "type": "git", "url": "https://github.com/nooblk-98/burnbar" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nooblk-98/burnbar"
+  },
   "homepage": "https://github.com/nooblk-98/burnbar#installation",
-  "bugs": { "url": "https://github.com/nooblk-98/burnbar/issues" },
-  "bin": { "burnbar": "npm/bin/burnbar.cjs" },
-  "files": ["npm/bin/burnbar.cjs", "install.ps1"],
-  "engines": { "node": ">=22" },
-  "publishConfig": { "access": "public" }
+  "bugs": {
+    "url": "https://github.com/nooblk-98/burnbar/issues"
+  },
+  "bin": {
+    "burnbar": "npm/bin/burnbar.cjs"
+  },
+  "files": [
+    "npm/bin/burnbar.cjs",
+    "npm/windows/install.ps1"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
 }

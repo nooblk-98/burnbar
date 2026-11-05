@@ -11,6 +11,7 @@ import (
 
 type Config struct {
 	Providers       string `json:"providers"` // "claude", "codex" or "both"
+	AlwaysShowPopup bool   `json:"alwaysShowPopup"`
 	ShowOverlay     bool   `json:"showOverlay"`
 	AllMonitors     bool   `json:"allMonitors"`
 	Position        string `json:"position"` // "auto", "left" or "right" (next to the tray)
@@ -31,7 +32,7 @@ type AlertState struct {
 
 func Default() Config {
 	startup := true
-	return Config{Providers: "both", ShowOverlay: true, AllMonitors: true, Position: "auto", IntervalMinutes: 3, Alerts: true, StartWithWindows: &startup}
+	return Config{Providers: "both", AlwaysShowPopup: true, ShowOverlay: false, AllMonitors: true, Position: "auto", IntervalMinutes: 3, Alerts: true, StartWithWindows: &startup}
 }
 
 // Dir is the folder holding settings and history; it is created if missing.

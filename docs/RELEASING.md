@@ -14,7 +14,7 @@ git push origin main v0.2.2
 
 The `build` workflow runs vet, generates the icon, manifest and version
 information, then builds `burnbar.exe`. It uploads `burnbar.exe`,
-`burnbar.exe.sha256`, and a copy of `install.ps1` directly to a GitHub release,
+`burnbar.exe.sha256` directly to a GitHub release,
 without using Actions artifact storage. A version such as `v0.2.2` creates a normal release; a version with a
 suffix such as `v0.2.2-beta.1` creates a prerelease.
 
@@ -34,7 +34,7 @@ remains installable.
 ## npm installer publishing
 
 The root `package.json` defines the dependency-free `burnbar` CLI. It bundles
-`npm/bin/burnbar.cjs` and `install.ps1`, not executable binaries or provider data.
+`npm/bin/burnbar.cjs` and internal `npm/windows/install.ps1`, not executable binaries or provider data.
 The Node CLI uses the bundled script to retain checksum verification, process
 handling, rollback, settings/history preservation and shortcut creation. There is
 no install/postinstall hook and no runtime dependency download.
@@ -96,10 +96,11 @@ and history fixtures are unchanged. Development pushes additionally install the
 published development binary without launching it. These checks do not validate
 live desktop behavior. Local test sources remain excluded from Git.
 
-The PowerShell-only entry point remains supported for users without Node.js. Its
-`-Channel stable` default uses GitHub's latest stable endpoint; `-Channel development`
-selects the development prerelease channel. Preserve the asset names `burnbar.exe`
-and `burnbar.exe.sha256` in both channels.
+npx is the supported installation entry point. The old root `install.ps1` and
+remote-script bootstrap are removed. The verified Windows helper now lives only
+inside the npm package at `npm/windows/install.ps1`; the CLI supplies its channel
+and options. GitHub releases contain only the binary and checksum, not a standalone
+installer. Preserve `burnbar.exe` and `burnbar.exe.sha256` in both channels.
 
 ## Optional winget publishing
 

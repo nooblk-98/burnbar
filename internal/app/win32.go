@@ -67,6 +67,7 @@ var (
 	pDeleteObject       = gdi32.NewProc("DeleteObject")
 	pDeleteDC           = gdi32.NewProc("DeleteDC")
 
+	pShellNotifyIconGetRect       = shell32.NewProc("Shell_NotifyIconGetRect")
 	pShellNotifyIconW             = shell32.NewProc("Shell_NotifyIconW")
 	pShellExecuteW                = shell32.NewProc("ShellExecuteW")
 	pSHQueryUserNotificationState = shell32.NewProc("SHQueryUserNotificationState")
@@ -82,6 +83,7 @@ const (
 	WS_EX_TOPMOST        = 0x00000008
 	WS_EX_NOACTIVATE     = 0x08000000
 	WM_DESTROY           = 0x0002
+	WM_CLOSE             = 0x0010
 	WM_TIMER             = 0x0113
 	WM_COMMAND           = 0x0111
 	WM_MOUSEMOVE         = 0x0200

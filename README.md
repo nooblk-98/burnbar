@@ -10,17 +10,16 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D4)](#installation)
 [![License](https://img.shields.io/github/license/nooblk-98/burnbar)](LICENSE)
 
-**Claude and Codex usage meter for the Windows taskbar.**<br>
+**Claude and Codex usage at a glance, beside your Windows tray.**<br>
 See how fast you're burning through your plan limits without leaving what you're doing.
 
 [Features](#features) • [See it in action](#see-it-in-action) • [Installation](#installation) • [Build from source](#build-from-source)
 
-<img src="assets/social-preview.png" alt="BurnBar, Claude and Codex on your Windows taskbar, with quotas, history, and alerts" width="848">
+<img src="docs/images/tray-popup-dark.png" alt="BurnBar framed tray popup with Claude and Codex usage" width="410">
 
 </div>
 
-Claude and Codex have session and longer-term plan limits. BurnBar keeps both providers on your
-taskbar, warns you before you run out, and shows whether you're using them faster than the time
+Claude and Codex have session and longer-term plan limits. BurnBar keeps both providers in a compact tray-anchored card, warns you before you run out, and shows whether you're using them faster than the time
 window allows. Use both together, or select one from **Usage providers** in the right-click menu.
 Codex window lengths come from your account rather than assuming every plan uses the same limits.
 
@@ -30,25 +29,26 @@ Codex window lengths come from your account rather than assuming every plan uses
 
 ## Features
 
-- **Claude + Codex**: one compact meter rotates between providers every 8 seconds with a downward
-  flip animation. The provider name stays visible above its two quota bars. Rotation pauses on
-  hover and while details are open, and respects Windows' animation setting.
-  Select Claude only or Codex only to keep one provider visible. Bars turn red at 90%.
-- **Pace marker**: a tick on each bar shows how much of the window's time has passed. A bar past its
-  tick means you'll hit the limit before it resets.
-- **Stays out of the way**: finds free space on the taskbar so it never covers app icons, follows the
-  light/dark theme and display scaling, and hides during fullscreen apps and games.
-  The meter narrows when taskbar buttons need more room. If no safe gap fits, it hides
-  until space opens; the tray icon and details remain available. It never floats over desktop
-  content. Vertical or too-short taskbars also use the tray icon. Search, Start and ordinary
-  window clicks keep it visible when space is available.
+- **Always-visible tray popup**: a rounded, framed card shows both providers above
+  the notification-area icon by default, with quota bars, pace markers and reset times.
+  It opens without stealing focus and follows light/dark theme and display scaling.
+- **Your choice**: uncheck **Always show popup** in the right-click menu for click-to-open
+  mode. Click the card for full details. Esc or clicking elsewhere collapses details
+  back to the persistent card, or closes it in click-only mode. The choice survives restarts.
+- **Fullscreen-aware**: the persistent card hides during fullscreen apps and returns
+  afterwards. It stays inside the monitor's work area and follows the tray icon.
+- **Optional taskbar meter**: enable **Show taskbar meter (optional)** for the rotating
+  compact bars. Existing taskbar preferences are preserved when updating; new profiles
+  use the popup instead. Bars turn red at 90%.
+- **Pace marker**: a tick on each bar shows how much of the window's time has passed.
+  A bar past its tick means you'll hit the limit before it resets.
 - **Details panel**: separate provider panels, reported quota windows, reset times, and independent
   24-hour and 7-day history charts. Claude also shows this week's usage by product when available.
 - **Alerts**: Windows notifications at 80% and 95%, and when a limit you'd been close to resets.
 - **Fresh numbers**: refreshes on a schedule, within a minute of Claude Code or Codex activity, and right after
   a limit resets, backing off automatically if the API rate-limits.
-- **Multi-monitor**: a meter on every taskbar, plus a tray icon with tooltip and menu.
-- **Lightweight**: a single executable with no installer. Codex usage uses your existing Codex CLI.
+- **Multi-monitor**: the popup follows the primary notification icon; optional meters can appear on every taskbar.
+- **Lightweight**: one native executable, installed or updated with npx. Codex usage uses your existing Codex CLI.
 - **Start with Windows**: enabled on first launch for new users; turn it off from the
   right-click menu at any time. Existing startup preferences are preserved.
 - **About**: right-click the meter or tray icon for the app version, developer credits,
@@ -57,10 +57,18 @@ Codex window lengths come from your account rather than assuming every plan uses
 ## See it in action
 
 <div align="center">
-<img src="docs/images/burnbar-demo.gif" alt="BurnBar on Windows, showing the rotating taskbar meter and Claude and Codex usage details" width="848">
+<img src="docs/images/tray-popup-light.png" alt="BurnBar tray popup, light theme" width="400">
+<img src="docs/images/tray-popup-dark.png" alt="BurnBar tray popup, dark theme" width="400">
 <br>
-<sub>BurnBar in action: Claude and Codex usage on the taskbar, with details a click away.</sub>
+<sub>Rendered demo previews: the always-visible overview. Click for charts and full details.</sub>
 </div>
+
+<details>
+<summary>Optional taskbar meter demo</summary>
+
+<img src="docs/images/burnbar-demo.gif" alt="The optional rotating taskbar meter and usage details" width="848">
+
+</details>
 
 ## Installation
 
@@ -71,89 +79,52 @@ You need Windows 10 or 11 and a signed-in provider:
   (`codex login`). API-key-only accounts do not provide these subscription usage limits.
   BurnBar also detects the CLI bundled with the Windows Codex desktop app when available.
 
-Both providers rotate through the meter by default. A missing login affects only that provider. Select
+Both providers appear in the popup by default. A missing login affects only that provider. Select
 **Usage providers** from the right-click menu to hide a provider you don't use.
 
 ### Install or update with npx
 
-Requires Windows, [Node.js 22+](https://nodejs.org/) (includes npm/npx), and
-Windows PowerShell 5.1. BurnBar itself does not need Node.js after installation.
-
-Install or update using these npm channels (the stable `latest` tag is created
-by the first stable release after this workflow reaches main):
+Requires [Node.js 22+](https://nodejs.org/) (includes npm/npx) and Windows PowerShell
+5.1. BurnBar itself does not need Node.js after installation. No administrator
+access or npm login is required.
 
 ```powershell
-# Latest stable release (same command for first install and updates)
-npx --yes burnbar@latest install
-
-# Latest development build (may contain bugs)
+# Install or update to the latest development build
 npx --yes burnbar@development install
 
-# Switch back to stable
-npx --yes burnbar@latest update --channel stable
-```
-
-`latest` and `development` are **npm installer channels**. The installer selects
-the matching **GitHub binary channel** by default; `--channel` overrides it.
-The installer package version is not a pin to a particular executable version:
-each invocation checks GitHub for the latest published build of that channel.
-Updates are explicit, not an always-running automatic updater.
-
-**Before the first stable npm publish**, use the development installer to install
-the stable executable:
-
-```powershell
+# Install or update to the latest stable executable
 npx --yes burnbar@development install --channel stable
 ```
 
-Alternatively, use the GitHub-backed package (also
-requires Git). These commands do not require an npm account or npm publication:
+`burnbar@development` is published and verified. Use the explicit stable-channel
+command above until the first stable npm package is released from main. npm's
+initial `latest` alias currently also points to a development installer; do not
+use that alias to select stable software yet.
+
+After the first stable version tag publishes the stable npm channel, this will
+become the stable shortcut:
 
 ```powershell
-npx --yes github:nooblk-98/burnbar#development install --channel stable
-npx --yes github:nooblk-98/burnbar#development install --channel development
+npx --yes burnbar@latest install
 ```
 
-Both channels use `%LOCALAPPDATA%\Programs\BurnBar` and preserve existing settings,
-history and startup preferences when switching. The CLI delegates to its bundled
-PowerShell installer, verifies SHA-256 before replacing anything, and creates a
-Start menu shortcut. A development push publishes an immutable prerelease build;
-stable installs never select those prereleases.
+`install` and `update` perform the same verified process. Running the command
+again updates the executable; there is no background auto-updater. Switching
+channels preserves settings, history and startup preferences.
 
 ```powershell
-# Optional flags work with either package source
-npx --yes burnbar@latest update --install-dir 'D:\Apps\BurnBar' --no-start
+# Optional: another folder, without launching
+npx --yes burnbar@development update --channel stable --install-dir 'D:\Apps\BurnBar' --no-start
+
+# Check release metadata without installing
 npx --yes burnbar@development install --dry-run
 ```
 
-`--dry-run` reads release metadata only: no binary download, file replacement,
-process shutdown or launch. See [release setup](docs/RELEASING.md) for npm publishing.
-
-### Install or update with PowerShell (no Node.js required)
-
-
-Run this in a regular PowerShell window; administrator access is not needed:
-
-```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/nooblk-98/burnbar/main/install.ps1)))
-```
-
-The same command installs or updates the **latest stable release** in
-`%LOCALAPPDATA%\Programs\BurnBar`, verifies its SHA-256 checksum, adds a Start menu
-shortcut, and launches BurnBar. Existing settings and history are kept. A running
-BurnBar instance in your session is closed after the download is verified.
-
-You can [review the installer](install.ps1) before running it. To choose a folder
-or install without launching:
-
-```powershell
-$installer = irm https://raw.githubusercontent.com/nooblk-98/burnbar/main/install.ps1
-& ([scriptblock]::Create($installer)) -InstallDir 'D:\Apps\BurnBar' -NoStart
-```
-
-For a manual install, download `burnbar.exe` from the
-[releases page](https://github.com/nooblk-98/burnbar/releases), put it anywhere,
-and run it.
+Both channels install into `%LOCALAPPDATA%\Programs\BurnBar` by default, verify
+SHA-256 before replacement, and create a Start menu shortcut. The reviewed Windows
+helper is bundled inside the npm package; no remote script is fetched and executed.
+`--dry-run` changes no files or running processes. Development builds may contain
+bugs; stable installs exclude prereleases. See [release setup](docs/RELEASING.md).
 
 On its first normal launch, BurnBar enables **Start with Windows** for a new profile.
 You can disable it from the right-click menu. Demo and diagnostic modes do not enable it.
@@ -174,8 +145,7 @@ You can disable it from the right-click menu. Demo and diagnostic modes do not e
 2. Open **Windows Security > App & browser control > Smart App Control settings**.
 3. If you trust the download and choose to proceed, select **Off** before running
    BurnBar. Read the confirmation carefully.
-4. Download `burnbar.exe` from this repository's releases, place it in your preferred
-   folder, and run it. BurnBar is portable and has no installer.
+4. Run the npx install command above again, then launch BurnBar.
 5. Afterwards, return to **Smart App Control settings** and select **On**, if
    available. Restart if Windows asks, and confirm protection is on.
 

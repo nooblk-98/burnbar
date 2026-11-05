@@ -104,7 +104,7 @@ jobs:
           "@ | Out-File -Encoding utf8 notes.md
           $extra = @()
           if ($env:GITHUB_REF_NAME.Contains("-")) { $extra = @("--prerelease") }
-          gh release create "$env:GITHUB_REF_NAME" bin/burnbar.exe bin/burnbar.exe.sha256 install.ps1 `
+          gh release create "$env:GITHUB_REF_NAME" bin/burnbar.exe bin/burnbar.exe.sha256 `
             --repo "$env:GITHUB_REPOSITORY" --verify-tag --title "BurnBar $env:GITHUB_REF_NAME" `
             --generate-notes --notes-file notes.md @extra
 
@@ -117,7 +117,7 @@ jobs:
           $tag = "dev-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
           $hash = (Get-FileHash bin/burnbar.exe -Algorithm SHA256).Hash.ToLower()
           "$hash  burnbar.exe" | Out-File -Encoding ascii bin/burnbar.exe.sha256
-          gh release create $tag bin/burnbar.exe bin/burnbar.exe.sha256 install.ps1 `
+          gh release create $tag bin/burnbar.exe bin/burnbar.exe.sha256 `
             --repo "$env:GITHUB_REPOSITORY" --target "$env:GITHUB_SHA" --prerelease --latest=false `
             --title "BurnBar development ${{ steps.version.outputs.version }}" `
             --notes "Unreleased development build from $env:GITHUB_SHA. Unsigned. May contain bugs."

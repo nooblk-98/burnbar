@@ -105,6 +105,8 @@ func writeSnapshots(dir string, demo bool, mode string) error {
 			"widget-hover-" + name + ".png": render.GroupWidget(1.25, readings, th, true),
 			"popup-" + name + ".png":        render.GroupPopup(1.25, panels, th, 1400, 1000),
 		}
+		card := render.TrayCard(1.25, readings, th)
+		imgs["tray-popup-"+name+".png"] = render.TrayBubble(card, 1.25, th, card.Rect.Dx()-35, false)
 		if len(readings) > 0 {
 			imgs["widget-narrow-"+name+".png"] = render.ProviderWidgetSized(1.25, readings[0], th, false, render.MinimumWidgetWidth(1.25))
 		}

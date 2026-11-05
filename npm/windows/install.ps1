@@ -2,10 +2,8 @@
 <#
 .SYNOPSIS
 Installs or updates a stable or development BurnBar release for the current user.
-.EXAMPLE
-& .\install.ps1
-.EXAMPLE
-& .\install.ps1 -InstallDir 'D:\Apps\BurnBar' -NoStart
+.NOTES
+Internal npx helper. Run `npx --yes burnbar@development install` instead.
 #>
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(

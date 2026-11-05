@@ -43,6 +43,7 @@ const (
 	cmdAbout      = 7
 	cmdRepository = 8
 	cmdExit       = 9
+	cmdAlwaysShow = 10
 	cmdPosition   = 100 // + index into positions
 	cmdInterval   = 200 // + minutes
 	cmdProvider   = 300 // + index into providerModes
@@ -119,6 +120,12 @@ type app struct {
 	flipStarted    time.Time
 	flipPrevious   int
 
+	popupAnchor   RECT
+	popupWork     RECT
+	popupScale    float64
+	popupLight    bool
+	popupExpanded bool
+	popupBounds   RECT
 	popupVisible  bool
 	popupActive   bool // became the foreground window at least once since shown
 	popupHiddenAt time.Time
@@ -226,6 +233,7 @@ func (a *app) run() error {
 
 	a.place(true)
 	a.updateTray()
+	a.syncPopup()
 	if startupErr != nil {
 		a.notify("Start with Windows could not be updated", startupErr.Error(), true)
 	}
@@ -577,43 +585,147 @@ func (a *app) paint(hwnd uintptr, img *image.RGBA, x, y int) {
 
 // Details popup
 
-// togglePopup opens the details panel above the given taskbar, centred on centerX.
+// togglePopup is called only from deferred UI work, never a shell callback.
 func (a *app) togglePopup(tb uintptr, centerX int) {
+	if a.cfg.AlwaysShowPopup {
+		a.popupExpanded = !a.popupExpanded
+		if a.popupVisible {
+			a.renderPopup()
+		} else {
+			a.syncPopup()
+		}
+		return
+	}
 	if a.popupVisible {
 		a.hidePopup()
 		return
 	}
-	// The click that deactivated (and so closed) the popup should not immediately reopen it.
 	if time.Since(a.popupHiddenAt) < 300*time.Millisecond {
 		return
 	}
 	a.popupTB, a.popupCenterX = tb, centerX
+	a.popupExpanded = false
+	a.showPopup(true)
+}
+
+func (a *app) showPopup(activate bool) {
 	a.renderPopup()
 	a.popupVisible, a.popupActive = true, false
-	pShowWindow.Call(a.popup, SW_SHOW)
-	pSetForegroundWindow.Call(a.popup)
+	if activate {
+		pShowWindow.Call(a.popup, SW_SHOW)
+		pSetForegroundWindow.Call(a.popup)
+	} else {
+		pShowWindow.Call(a.popup, SW_SHOWNOACTIVATE)
+	}
 }
 
 func (a *app) hidePopup() {
-	pShowWindow.Call(a.popup, SW_HIDE)
-	a.popupVisible = false
+	a.popupVisible = false // ShowWindow may synchronously deliver WM_ACTIVATE
 	a.popupHiddenAt = time.Now()
+	pShowWindow.Call(a.popup, SW_HIDE)
+}
+
+// syncPopup restores a persistent card without stealing focus after fullscreen,
+// Explorer restart, theme/DPI changes, or moving the notification icon.
+func (a *app) syncPopup() {
+	if fullscreenAppActive() {
+		if a.popupVisible {
+			a.hidePopup()
+		}
+		return
+	}
+	if a.cfg.AlwaysShowPopup {
+		a.popupTB = a.primaryTaskbar()
+		if a.popupTB == 0 {
+			if a.popupVisible {
+				a.hidePopup()
+			}
+			return
+		}
+		if !a.popupVisible {
+			a.showPopup(false)
+		} else if a.popupChanged() {
+			a.renderPopup()
+		}
+	} else if a.popupVisible && a.popupChanged() {
+		a.renderPopup()
+	}
+}
+
+func (a *app) popupChanged() bool {
+	return a.popupAnchor != a.trayAnchor() || a.popupWork != workArea(a.popupTB) ||
+		a.popupScale != float64(dpiForWindow(a.popupTB))/96 || a.popupLight != systemUsesLightTheme() ||
+		a.popupMinute != time.Now().Minute()
+}
+
+// dismissPopup collapses details in always-visible mode, or closes a click-only card.
+func (a *app) dismissPopup() {
+	if a.cfg.AlwaysShowPopup {
+		a.popupExpanded = false
+		a.renderPopup()
+	} else {
+		a.hidePopup()
+	}
+}
+
+func (a *app) trayAnchor() RECT {
+	tb, _ := windowRect(a.popupTB)
+	// NOTIFYICONIDENTIFIER's native pointer alignment is provided by Go.
+	id := struct {
+		Size uint32
+		Hwnd uintptr
+		UID  uint32
+		GUID [16]byte
+	}{Hwnd: a.main, UID: 1}
+	id.Size = uint32(unsafe.Sizeof(id))
+	var icon RECT
+	if hr, _, _ := pShellNotifyIconGetRect.Call(uintptr(unsafe.Pointer(&id)), uintptr(unsafe.Pointer(&icon))); hr == 0 && icon.Right > icon.Left && icon.Bottom > tb.Top && icon.Top < tb.Bottom && icon.Right > tb.Left && icon.Left < tb.Right {
+		return icon
+	}
+	// Hidden overflow icons have no useful taskbar rectangle. Anchor near the
+	// primary notification area, not at the cursor or the hidden overflow flyout.
+	scale := float64(dpiForWindow(a.popupTB)) / 96
+	x := tb.Right - int32(60*scale)
+	return RECT{Left: x, Right: x + 1, Top: tb.Top, Bottom: tb.Bottom}
 }
 
 func (a *app) renderPopup() {
+	if a.popupTB == 0 {
+		a.popupTB = a.primaryTaskbar()
+	}
+	if a.popupTB == 0 {
+		return
+	}
 	scale := float64(dpiForWindow(a.popupTB)) / 96
+	readings := a.snapshot()
 	var panels []render.Panel
-	for _, u := range a.snapshot() {
+	for _, u := range readings {
 		panels = append(panels, render.Panel{Usage: u, History: a.hist[u.Provider].Since(time.Now().Add(-7 * 24 * time.Hour))})
 	}
-	work := workArea(a.popupTB)
-	// Two columns on roomy screens; a compact stacked summary on small displays.
-	img := render.GroupPopup(scale, panels, render.NewTheme(systemUsesLightTheme()), int(work.Right-work.Left)-24, int(work.Bottom-work.Top)-24)
-	w, h := img.Rect.Dx(), img.Rect.Dy()
-	gapPx := int(12 * scale)
-	x := min(max(a.popupCenterX-w/2, int(work.Left)+gapPx), int(work.Right)-gapPx-w)
-	y := int(work.Bottom) - gapPx - h
-	a.paint(a.popup, img, x, y)
+	work, anchor := workArea(a.popupTB), a.trayAnchor()
+	th := render.NewTheme(systemUsesLightTheme())
+	var content *image.RGBA
+	if a.popupExpanded {
+		content = render.GroupPopup(scale, panels, th, int(work.Right-work.Left)-24, int(work.Bottom-work.Top)-24)
+	} else {
+		content = render.TrayCard(scale, readings, th)
+	}
+	maxW, maxH := int(work.Right-work.Left), int(work.Bottom-work.Top)
+	if maxW <= 0 || maxH <= 0 {
+		return
+	}
+	tailTop := anchor.Bottom <= work.Top
+	img := render.TrayBubble(content, scale, th, content.Rect.Dx()/2, tailTop)
+	img = render.FitPopup(img, maxW, maxH)
+	bounds, _ := layout.PlacePopup(work, anchor, img.Rect.Dx(), img.Rect.Dy(), int(6*scale))
+	// Point toward the actual icon after clamping the card to the screen edge.
+	tipX := int((anchor.Left+anchor.Right)/2 - bounds.Left)
+	tipX = tipX * (content.Rect.Dx() + 2*max(2, int(4*scale))) / img.Rect.Dx()
+	img = render.FitPopup(render.TrayBubble(content, scale, th, tipX, tailTop), maxW, maxH)
+	a.paint(a.popup, img, int(bounds.Left), int(bounds.Top))
+	a.popupBounds = bounds
+	a.popupAnchor, a.popupWork = anchor, work
+	a.popupScale, a.popupLight = scale, systemUsesLightTheme()
 	a.popupMinute = time.Now().Minute()
 }
 
@@ -726,7 +838,8 @@ func (a *app) showMenuAt(pt POINT) {
 	}
 	add(menu, MF_POPUP, providerMenu, "Usage providers")
 	add(menu, MF_SEPARATOR, 0, "")
-	add(menu, MF_STRING|check(a.cfg.ShowOverlay), cmdOverlay, "Show on taskbar")
+	add(menu, MF_STRING|check(a.cfg.AlwaysShowPopup), cmdAlwaysShow, "Always show popup")
+	add(menu, MF_STRING|check(a.cfg.ShowOverlay), cmdOverlay, "Show taskbar meter (optional)")
 	add(menu, MF_STRING|check(a.cfg.AllMonitors), cmdMonitors, "Show on all monitors")
 	add(menu, MF_POPUP, posMenu, "Position")
 	add(menu, MF_POPUP, intMenu, "Refresh interval")
@@ -746,7 +859,15 @@ func (a *app) showMenuAt(pt POINT) {
 	switch {
 	case cmd == cmdDetails:
 		a.popupHiddenAt = time.Time{}
-		a.togglePopup(a.primaryTaskbar(), int(pt.X))
+		a.popupTB = a.primaryTaskbar()
+		a.popupExpanded = true
+		a.showPopup(true)
+	case cmd == cmdAlwaysShow:
+		a.cfg.AlwaysShowPopup = !a.cfg.AlwaysShowPopup
+		a.popupExpanded = false
+		if !a.cfg.AlwaysShowPopup {
+			a.hidePopup()
+		}
 	case cmd == cmdRefresh:
 		a.refresh(true)
 	case cmd == cmdOverlay:
@@ -791,6 +912,7 @@ func (a *app) showMenuAt(pt POINT) {
 	if a.popupVisible {
 		a.renderPopup()
 	}
+	a.syncPopup()
 }
 
 // Window procedures
@@ -802,9 +924,7 @@ func mainProc(hwnd, msg, wparam, lparam uintptr) uintptr {
 		switch wparam {
 		case timerLayout:
 			a.place(false)
-			if a.popupVisible && time.Now().Minute() != a.popupMinute {
-				a.renderPopup() // keep "resets in" countdowns current
-			}
+			a.syncPopup()
 		case timerRefresh:
 			a.refresh(false)
 		case timerRotate:
@@ -920,22 +1040,30 @@ func overlayProc(hwnd, msg, wparam, lparam uintptr) uintptr {
 func popupProc(hwnd, msg, wparam, lparam uintptr) uintptr {
 	a := theApp
 	switch msg {
+	case WM_CLOSE:
+		a.dismissPopup()
+		return 0
 	case WM_ACTIVATE:
 		// Close when the user clicks elsewhere. If Windows refused to give the popup focus,
 		// it stays open until the widget or tray icon is clicked again.
 		if wparam&0xFFFF != WA_INACTIVE {
 			a.popupActive = true
 		} else if a.popupVisible && a.popupActive {
-			a.hidePopup()
+			a.dismissPopup()
 		}
 		return 0
 	case WM_KEYDOWN:
 		if wparam == VK_ESCAPE {
-			a.hidePopup()
+			a.dismissPopup()
 		}
 		return 0
 	case WM_LBUTTONUP:
-		a.refresh(true)
+		if !a.popupExpanded {
+			a.popupExpanded = true
+			a.renderPopup()
+		} else {
+			a.refresh(true)
+		}
 		return 0
 	case WM_RBUTTONUP:
 		pPostMessageW.Call(a.main, msgMenu, 0, 0)

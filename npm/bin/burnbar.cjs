@@ -59,7 +59,7 @@ function invocation(options, env = process.env) {
   // script or interpolate user input into a PowerShell command string.
   const executable = path.win32.join(env.SystemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
   const args = ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
-    '-File', path.resolve(__dirname, '../../install.ps1'), '-Channel', options.channel];
+    '-File', path.resolve(__dirname, '../windows/install.ps1'), '-Channel', options.channel];
   if (options.installDir) args.push('-InstallDir', options.installDir);
   if (options.noStart) args.push('-NoStart');
   if (options.dryRun) args.push('-WhatIf');
