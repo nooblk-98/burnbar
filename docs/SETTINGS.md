@@ -139,3 +139,14 @@ npx --yes burnbar@latest update
 
 Nothing downloads or installs automatically. Development users can keep their
 channel with `npx --yes burnbar@development update` instead.
+
+### When the provider rate-limits usage requests
+
+A 429 response is not your quota percentage. With no successful reading yet,
+BurnBar shows an unavailable-data message rather than empty quota bars or a false
+"Updated just now". After a previous success, its values and original timestamp
+remain visible as last-known data. A retry countdown shows the provider cooldown.
+Manual refresh, scheduled polling and activity refresh all respect it. BurnBar
+uses exponential backoff (2–16 minutes) and waits longer if a `Retry-After` header
+requires it; a dedicated timer retries at that deadline. It cannot remove a
+server-side limit, and restarting the app should not be used to force retries.

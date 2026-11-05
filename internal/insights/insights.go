@@ -27,6 +27,14 @@ func Age(at, now time.Time) string {
 	return fmt.Sprintf("Updated %dd ago", int(d.Hours()/24))
 }
 
+// Freshness refers to actual quota data, never the timestamp of a failed attempt.
+func Freshness(u usage.Usage, now time.Time) string {
+	if len(u.All()) == 0 || u.UpdatedAt.IsZero() {
+		return "No successful reading yet"
+	}
+	return Age(u.UpdatedAt, now)
+}
+
 func Health(u usage.Usage, now time.Time, staleAfter time.Duration) string {
 	if u.Err != "" {
 		e := strings.ToLower(u.Err)
@@ -34,7 +42,14 @@ func Health(u usage.Usage, now time.Time, staleAfter time.Duration) string {
 		case strings.Contains(e, "loading"):
 			return "Loading"
 		case u.RateLimited:
-			return "Rate limited — retrying"
+			if u.RetryAt.After(now) {
+				seconds := int(math.Ceil(u.RetryAt.Sub(now).Seconds()))
+				if seconds >= 60 {
+					return fmt.Sprintf("Rate limited — retry in %dm %02ds", seconds/60, seconds%60)
+				}
+				return fmt.Sprintf("Rate limited — retry in %ds", seconds)
+			}
+			return "Rate limited — waiting to retry"
 		case strings.Contains(e, "login"), strings.Contains(e, "sign in"), strings.Contains(e, "token"), strings.Contains(e, "credentials"):
 			return "Sign-in required"
 		case strings.Contains(e, "network"), strings.Contains(e, "timeout"), strings.Contains(e, "connection"), strings.Contains(e, "dial "):

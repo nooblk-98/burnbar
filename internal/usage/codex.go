@@ -200,7 +200,7 @@ func (r *codexRPC) call(id int, method string, params any) (json.RawMessage, err
 func FetchCodex() Usage {
 	body, err := FetchCodexRaw()
 	if err != nil {
-		return Usage{Provider: Codex, UpdatedAt: time.Now(), Err: err.Error(), RateLimited: errors.Is(err, errRateLimited)}
+		return Usage{Provider: Codex, Err: err.Error(), RateLimited: errors.Is(err, errRateLimited)}
 	}
 	return ParseCodex(body)
 }

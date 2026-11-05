@@ -13,7 +13,7 @@ func (a *app) usageText() string {
 	now := time.Now()
 	var lines []string
 	for _, u := range a.snapshot() {
-		lines = append(lines, u.Name()+" usage", insights.Age(u.UpdatedAt, now))
+		lines = append(lines, u.Name()+" usage", insights.Freshness(u, now))
 		if health := insights.Health(u, now, a.staleAfter()); health != "" {
 			lines = append(lines, health)
 			if len(u.All()) > 0 {

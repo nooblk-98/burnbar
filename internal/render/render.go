@@ -332,7 +332,7 @@ func popup(scale float64, u usage.Usage, hist []history.Sample, th Theme, foreca
 	status := insights.Health(u, time.Now(), staleAfter)
 	if status != "" {
 		y += s(18)
-		drawText(content, small, status+" — "+insights.Age(u.UpdatedAt, time.Now()), left, y, th.warning())
+		drawText(content, small, status+" — "+insights.Freshness(u, time.Now()), left, y, th.warning())
 	}
 
 	for _, w := range u.All() {
