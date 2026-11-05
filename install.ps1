@@ -67,7 +67,7 @@ try {
         # a rolling release, where concurrent clients could fetch a mixed pair.
         $release = $null
         for ($page = 1; $page -le 20; $page++) {
-            $releases = @(Invoke-RestMethod -Uri "https://api.github.com/repos/nooblk-98/burnbar/releases?per_page=100&page=$page" -Headers $headers -TimeoutSec 30)
+            $releases = @((Invoke-RestMethod -Uri "https://api.github.com/repos/nooblk-98/burnbar/releases?per_page=100&page=$page" -Headers $headers -TimeoutSec 30))
             $release = $releases | Where-Object { -not $_.draft -and $_.prerelease -and $_.tag_name -match '^dev-[0-9]+-[0-9]+$' } | Select-Object -First 1
             if ($release -or $releases.Count -lt 100) { break }
         }
