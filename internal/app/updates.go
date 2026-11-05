@@ -86,7 +86,7 @@ func (a *app) onUpdate() {
 	if a.settings != nil {
 		a.settings.set(settingUpdateStatus, a.updateStatus())
 	}
-	if err == nil && a.cfg.CheckUpdates && updates.Newer(a.version, release.Version) && a.updateNotified != release.Version && !a.automaticSuppressed() {
+	if err == nil && a.cfg.CheckUpdates && updates.Newer(a.version, release.Version) && a.updateNotified != release.Version && !a.nativeSuppressed() {
 		a.notify("BurnBar "+release.Version+" is available", "Open Settings > Updates for release notes and the update command.", false)
 		a.updateNotified = release.Version
 	}
