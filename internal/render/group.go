@@ -6,6 +6,7 @@ import (
 	"image/draw"
 	"math"
 	"strings"
+	"time"
 
 	"github.com/nooblk-98/burnbar/internal/history"
 	"github.com/nooblk-98/burnbar/internal/usage"
@@ -13,8 +14,10 @@ import (
 )
 
 type Panel struct {
-	Usage   usage.Usage
-	History []history.Sample
+	Usage        usage.Usage
+	History      []history.Sample
+	ShowForecast bool
+	StaleAfter   time.Duration
 }
 
 func wrapText(face font.Face, text string, width float64) []string {
@@ -54,7 +57,11 @@ func GroupPopup(scale float64, panels []Panel, th Theme, maxW, maxH int) *image.
 			if compact {
 				u.Extra, u.Breakdown, hist = nil, nil, nil
 			}
-			images = append(images, Popup(scale, u, hist, th))
+			staleAfter := panel.StaleAfter
+			if staleAfter <= 0 {
+				staleAfter = 10 * time.Minute
+			}
+			images = append(images, popup(scale, u, hist, th, panel.ShowForecast, staleAfter))
 		}
 		return images
 	}
@@ -101,8 +108,11 @@ func GroupPopup(scale float64, panels []Panel, th Theme, maxW, maxH int) *image.
 }
 
 func GroupTrayIcon(size int, readings []usage.Usage, light bool) *image.RGBA {
+	return GroupTrayIconTheme(size, readings, NewTheme(light))
+}
+func GroupTrayIconTheme(size int, readings []usage.Usage, th Theme) *image.RGBA {
 	if len(readings) == 1 {
-		return TrayIcon(size, readings[0], light)
+		return trayIcon(size, readings[0], th)
 	}
 	// Each icon row shows the more-used quota for that provider.
 	var windows []*usage.Window
@@ -116,9 +126,9 @@ func GroupTrayIcon(size int, readings []usage.Usage, light bool) *image.RGBA {
 		windows = append(windows, highest)
 	}
 	if len(windows) < 2 {
-		return TrayIcon(size, usage.Usage{}, light)
+		return trayIcon(size, usage.Usage{}, th)
 	}
-	return TrayIcon(size, usage.Usage{FiveHour: windows[0], SevenDay: windows[1]}, light)
+	return trayIcon(size, usage.Usage{FiveHour: windows[0], SevenDay: windows[1]}, th)
 }
 
 func GroupTooltip(readings []usage.Usage) string {

@@ -22,6 +22,20 @@ type Config struct {
 	// Nil identifies a legacy profile whose preference still lives in the registry.
 	StartWithWindows *bool `json:"startWithWindows,omitempty"`
 
+	PrimaryThresholds   []int  `json:"primaryThresholds"`
+	SecondaryThresholds []int  `json:"secondaryThresholds"`
+	SnoozeUntil         int64  `json:"snoozeUntil,omitempty"`
+	QuietHours          bool   `json:"quietHours"`
+	QuietStart          int    `json:"quietStart"`
+	QuietEnd            int    `json:"quietEnd"`
+	RespectWindowsQuiet bool   `json:"respectWindowsQuiet"`
+	CompactNotices      bool   `json:"compactNotices"`
+	NativeNotices       bool   `json:"nativeNotices"`
+	ShowForecast        bool   `json:"showForecast"`
+	Theme               string `json:"theme"`
+	TextScale           int    `json:"textScale"`
+	Hotkey              bool   `json:"hotkey"`
+	CheckUpdates        bool   `json:"checkUpdates"`
 	// AlertState remembers, per limit, which thresholds were already announced in the current window.
 	AlertState map[string]AlertState `json:"alertState,omitempty"`
 }
@@ -34,7 +48,7 @@ type AlertState struct {
 
 func Default() Config {
 	startup := true
-	return Config{Providers: "both", PopupSeconds: alerts.DefaultPopupSeconds, PopupBehaviorVersion: 1, MilestoneState: alerts.Tracker{}, MilestonePopups: true, AlwaysShowPopup: false, IntervalMinutes: 3, Alerts: true, StartWithWindows: &startup}
+	return Config{Providers: "both", PopupSeconds: alerts.DefaultPopupSeconds, PopupBehaviorVersion: 1, MilestoneState: alerts.Tracker{}, MilestonePopups: true, AlwaysShowPopup: false, IntervalMinutes: 3, Alerts: true, PrimaryThresholds: alerts.DefaultThresholds(), SecondaryThresholds: alerts.DefaultThresholds(), QuietStart: 22 * 60, QuietEnd: 8 * 60, RespectWindowsQuiet: true, CompactNotices: true, ShowForecast: true, Theme: "system", TextScale: 100, CheckUpdates: true, StartWithWindows: &startup}
 }
 
 // Dir is the folder holding settings and history; it is created if missing.
@@ -71,6 +85,26 @@ func Load() Config {
 	if c.PopupSeconds < 1 || c.PopupSeconds > 300 {
 		c.PopupSeconds = alerts.DefaultPopupSeconds
 	}
+	if c.PrimaryThresholds == nil {
+		c.PrimaryThresholds = alerts.DefaultThresholds()
+	}
+	c.PrimaryThresholds = alerts.NormalizeThresholds(c.PrimaryThresholds)
+	if c.SecondaryThresholds == nil {
+		c.SecondaryThresholds = alerts.DefaultThresholds()
+	}
+	c.SecondaryThresholds = alerts.NormalizeThresholds(c.SecondaryThresholds)
+	if c.QuietStart < 0 || c.QuietStart >= 1440 {
+		c.QuietStart = 22 * 60
+	}
+	if c.QuietEnd < 0 || c.QuietEnd >= 1440 {
+		c.QuietEnd = 8 * 60
+	}
+	if c.TextScale != 100 && c.TextScale != 125 && c.TextScale != 150 {
+		c.TextScale = 100
+	}
+	if c.Theme != "system" && c.Theme != "light" && c.Theme != "dark" {
+		c.Theme = "system"
+	}
 	if c.MilestoneState == nil {
 		c.MilestoneState = alerts.Tracker{}
 	}
@@ -86,13 +120,16 @@ func Load() Config {
 	return c
 }
 
-func (c Config) Save() {
+func (c Config) Save() { _ = c.SaveChecked() }
+
+func (c Config) SaveChecked() error {
 	b, err := json.MarshalIndent(c, "", "  ")
 	if err != nil {
-		return
+		return err
 	}
 	tmp := path() + ".tmp"
-	if os.WriteFile(tmp, b, 0o644) == nil {
-		os.Rename(tmp, path())
+	if err := os.WriteFile(tmp, b, 0o600); err != nil {
+		return err
 	}
+	return os.Rename(tmp, path())
 }

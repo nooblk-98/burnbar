@@ -8,15 +8,15 @@ a signing service, certificate, or manual approval.
 Tag the commit you want to release and push it to GitHub:
 
 ```powershell
-git tag -a v0.3.0 -m "BurnBar v0.3.0"
-git push origin main v0.3.0
+git tag -a v0.4.0 -m "BurnBar v0.4.0"
+git push origin main v0.4.0
 ```
 
 The `build` workflow runs vet, generates the icon, manifest and version
 information, then builds `burnbar.exe`. It uploads `burnbar.exe`,
 `burnbar.exe.sha256` directly to a GitHub release,
-without using Actions artifact storage. A version such as `v0.3.0` creates a normal release; a version with a
-suffix such as `v0.3.0-beta.1` creates a prerelease.
+without using Actions artifact storage. A version such as `v0.4.0` creates a normal release; a version with a
+suffix such as `v0.4.0-beta.1` creates a prerelease.
 
 Windows may warn about or block an unsigned executable. Release assets include
 a SHA-256 checksum so downloads can be checked with `Get-FileHash`.

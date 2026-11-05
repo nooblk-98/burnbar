@@ -28,7 +28,8 @@ go build -o bin/burnbar-dev.exe ./cmd/burnbar
 ```
 
 Demo mode supplies sample readings without fetching provider usage or writing
-usage history. Settings are still loaded from your normal BurnBar profile.
+usage history or advancing/saving alert baselines. Settings are still loaded from
+your normal BurnBar profile; explicit settings edits can be saved.
 Only one BurnBar instance can run at a time, so exit the existing meter first.
 Use a real provider login only when testing behavior that requires one.
 
