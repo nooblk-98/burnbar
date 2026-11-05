@@ -220,61 +220,6 @@ func paceText(w *usage.Window) (string, bool) {
 	return "Within pace", false
 }
 
-// Taskbar widget, in 96-DPI units.
-const (
-	widgetW  = 130
-	widgetH  = 38
-	labelW   = 18
-	valueW   = 40
-	gap      = 4
-	barH     = 6
-	fontPx   = 11.5
-	rowPitch = 17
-)
-
-func WidgetSize(scale float64) (int, int) {
-	return int(math.Round(widgetW * scale)), int(math.Round(widgetH * scale))
-}
-
-// Widget draws the two-row meter. When hover is set, the value column shows time-to-reset.
-func Widget(scale float64, u usage.Usage, th Theme, hover bool) *image.RGBA {
-	w, h := WidgetSize(scale)
-	img := image.NewRGBA(image.Rect(0, 0, w, h))
-	// A nearly invisible backdrop keeps the whole widget clickable (alpha 0 pixels are click-through).
-	for i := 3; i < len(img.Pix); i += 4 {
-		img.Pix[i] = 1
-	}
-
-	face := faceFor(fontPx*scale, true)
-	capH := capHeight(face)
-	rows := []struct {
-		label string
-		win   *usage.Window
-	}{{usage.WindowShortLabel(u.FiveHour, "1st"), u.FiveHour}, {usage.WindowShortLabel(u.SevenDay, "2nd"), u.SevenDay}}
-	for i, row := range rows {
-		cy := float64(h)/2 + (float64(i)-0.5)*rowPitch*scale
-		baseline := cy + capH/2
-
-		drawText(img, face, row.label, 1*scale, baseline, th.text)
-		bx0 := (labelW + gap) * scale
-		bx1 := float64(w) - (valueW+gap)*scale
-		drawMeter(img, bx0, cy-barH*scale/2, bx1, cy+barH*scale/2, row.win, th, scale)
-
-		value := "–"
-		if u.Err != "" && row.win == nil {
-			value = "!"
-		}
-		if row.win != nil {
-			value = fmt.Sprintf("%.0f%%", row.win.Percent)
-			if hover && !row.win.ResetsAt.IsZero() {
-				value = shortDuration(time.Until(row.win.ResetsAt))
-			}
-		}
-		drawTextRight(img, face, value, float64(w)-1*scale, baseline, barColor(row.win))
-	}
-	return img
-}
-
 // Detail popup, in 96-DPI units.
 const (
 	popupW   = 320
@@ -338,7 +283,7 @@ func peak(samples []history.Sample, get func(history.Sample) float64) float64 {
 	return m
 }
 
-// Popup draws the details panel opened by clicking the widget or tray icon.
+// Popup draws the details panel opened from the tray popup.
 func Popup(scale float64, u usage.Usage, hist []history.Sample, th Theme) *image.RGBA {
 	s := func(v float64) float64 { return v * scale }
 	W := int(math.Round(s(popupW)))

@@ -81,7 +81,7 @@ func ClaudeDir() string {
 func credentialsPath() string { return filepath.Join(ClaudeDir(), ".credentials.json") }
 
 // readToken returns the OAuth access token Claude Code stores after `claude` login.
-// The widget only reads it; Claude Code itself refreshes it when it runs.
+// BurnBar only reads it; Claude Code itself refreshes it when it runs.
 func readToken() (string, error) {
 	b, err := os.ReadFile(credentialsPath())
 	if err != nil {

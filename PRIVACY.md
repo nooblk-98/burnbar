@@ -3,17 +3,23 @@
 This document describes BurnBar's own behavior in the current source code.
 Provider CLIs and services have their own settings and policies.
 
-## PowerShell installation
+## npx installation
 
-The optional [installer](install.ps1) checks the repository's latest stable
-release using GitHub's API and downloads its executable and checksum from GitHub
+The npx command downloads the installer package through npm (or GitHub when using
+its GitHub package specifier); these services receive normal package-request
+metadata. The dependency-free CLI invokes the PowerShell script bundled in that
+package. No install/postinstall lifecycle hook runs BurnBar automatically.
+
+The bundled [Windows helper](npm/windows/install.ps1) checks the repository's latest stable
+release, or development prereleases when explicitly selected, using GitHub's API
+and downloads its executable and checksum from GitHub
 over HTTPS. It sends a `BurnBar-Installer` User-Agent; normal network metadata is
 also visible to GitHub. It does not need a provider login or GitHub token.
 
 It installs into `%LOCALAPPDATA%\Programs\BurnBar` by default, creates a Start
 menu shortcut for the current user, and can close existing BurnBar processes
 in the same Windows session to perform an update. It keeps the existing
-`%APPDATA%\BurnBar` settings and histories. Use `-NoStart` to install without
+`%APPDATA%\BurnBar` settings and histories. Use `--no-start` to install without
 launching; in that mode it only closes an instance at the selected install path.
 
 ## Provider authentication and network requests
@@ -47,10 +53,11 @@ BurnBar watches file/directory change notifications under Claude Code's
 `projects` folder and Codex's `sessions` folder to schedule usage refreshes.
 The watcher does not read conversation contents, prompts, or source code.
 
-For placement, BurnBar reads taskbar control classes and rectangles using Windows
-UI Automation. Fullscreen detection reads the foreground window's class, process
-filename, and bounds. These observations are used locally to position or hide
-the meter. BurnBar also reads Windows theme, scaling, and animation settings.
+For popup placement, BurnBar reads its notification icon's rectangle and the
+monitor work area. It does not inspect taskbar controls or use UI Automation.
+Fullscreen detection reads the foreground window's class, process filename, and
+bounds, only to hide/suppress popups. Windows theme and display scaling are also
+read locally. Native tray tooltips are temporarily cleared while a card is open.
 
 On its first normal launch with a new profile, BurnBar enables **Start with Windows**
 by adding the executable to the current user's startup registry entry. Existing
@@ -67,7 +74,7 @@ BurnBar stores its files under `%APPDATA%\BurnBar\`:
 
 | File | Contents |
 | --- | --- |
-| `config.json` | Provider selection, startup preference, taskbar/display settings, refresh interval, and alert state, including quota percentages and reset timestamps |
+| `config.json` | Provider selection, startup preference, popup preferences and close delay, refresh interval, and alert state, including quota percentages, reset timestamps, and milestone high-water levels/window durations used to avoid duplicate popup notifications |
 | `history.jsonl` | Claude session and weekly percentages with timestamps |
 | `history-codex.jsonl` | Codex primary and secondary percentages with timestamps |
 
@@ -84,9 +91,9 @@ handled by the installed CLI. Your system's network/proxy settings still apply.
 
 ## Diagnostics and shared reports
 
-The `-taskbar-layout` flag prints local taskbar geometry, meter state, and the
-foreground process/class information. Usage summaries and error messages can
-contain local paths. Diagnostic output is not uploaded automatically.
+Usage summaries from `-once` and provider error messages can contain local paths.
+They are not uploaded automatically. The old taskbar-layout diagnostic was removed
+with the taskbar-widget implementation.
 
 Before opening a public issue, review screenshots and output, remove account or
 personal information, and never attach credential files, access tokens, or

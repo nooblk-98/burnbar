@@ -1,4 +1,4 @@
-// Package app is the Windows side of the meter: taskbar overlays, tray icon, popup and timers.
+// Package app is the Windows side of the meter: tray icon, popup and timers.
 package app
 
 import (
@@ -12,7 +12,7 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// Run shows the meter and blocks until the user exits. A second instance exits immediately.
+// Run starts the tray app and blocks until the user exits. A second instance exits immediately.
 func Run(demo bool, mode, version string) error {
 	// Win32 windows belong to the thread that created them; keep the message loop on one OS thread.
 	runtime.LockOSThread()

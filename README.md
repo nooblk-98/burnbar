@@ -10,17 +10,16 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D4)](#installation)
 [![License](https://img.shields.io/github/license/nooblk-98/burnbar)](LICENSE)
 
-**Claude and Codex usage meter for the Windows taskbar.**<br>
+**Claude and Codex usage at a glance, beside your Windows tray.**<br>
 See how fast you're burning through your plan limits without leaving what you're doing.
 
 [Features](#features) • [See it in action](#see-it-in-action) • [Installation](#installation) • [Build from source](#build-from-source)
 
-<img src="assets/social-preview.png" alt="BurnBar, Claude and Codex on your Windows taskbar, with quotas, history, and alerts" width="848">
+<img src="docs/images/burnbar-banner-rounded.png" alt="BurnBar Claude and Codex usage popup on the Windows desktop" width="848">
 
 </div>
 
-Claude and Codex have session and longer-term plan limits. BurnBar keeps both providers on your
-taskbar, warns you before you run out, and shows whether you're using them faster than the time
+Claude and Codex have session and longer-term plan limits. BurnBar keeps both providers in a tray-anchored card when you need it, warns you before you run out, and shows whether you're using them faster than the time
 window allows. Use both together, or select one from **Usage providers** in the right-click menu.
 Codex window lengths come from your account rather than assuming every plan uses the same limits.
 
@@ -30,36 +29,55 @@ Codex window lengths come from your account rather than assuming every plan uses
 
 ## Features
 
-- **Claude + Codex**: one compact meter rotates between providers every 8 seconds with a downward
-  flip animation. The provider name stays visible above its two quota bars. Rotation pauses on
-  hover and while details are open, and respects Windows' animation setting.
-  Select Claude only or Codex only to keep one provider visible. Bars turn red at 90%.
-- **Pace marker**: a tick on each bar shows how much of the window's time has passed. A bar past its
-  tick means you'll hit the limit before it resets.
-- **Stays out of the way**: finds free space on the taskbar so it never covers app icons, follows the
-  light/dark theme and display scaling, and hides during fullscreen apps and games.
-  The meter narrows when taskbar buttons need more room. If no safe gap fits, it hides
-  until space opens; the tray icon and details remain available. It never floats over desktop
-  content. Vertical or too-short taskbars also use the tray icon. Search, Start and ordinary
-  window clicks keep it visible when space is available.
+- **Brief milestone popups**: by default, a small framed card appears when either
+  provider's primary/session or secondary/weekly quota crosses **10%, 20%, … 100%**.
+  It shows the affected provider, takes no focus, and closes after the selected delay (**6 seconds** by default).
+  More updates do not keep extending it. Jumps show only the highest new milestone,
+  not a burst of every skipped threshold.
+- **Quiet by default**: first readings establish a baseline instead of replaying
+  old milestones. Saved per-window state avoids duplicates on refresh or restart;
+  quota resets rearm the tracker. Crossings are detected on the next successful
+  refresh, not continuously between API reads.
+- **Your choice**: click the tray icon any time to inspect usage; click an automatic
+  notice for details. Manual popups also close after the selected delay; clicks restart
+  their timer. Right-click → **Milestone popups (10% steps)** disables automatic
+  cards for click-only use. **Always show popup (optional)**
+  restores a persistent overview if preferred. Esc or clicking elsewhere closes
+  manual views unless always-show is enabled.
+- **Fullscreen-aware**: no automatic popup appears over a fullscreen app, and missed
+  milestones are not queued to interrupt you afterwards. Cards follow light/dark
+  theme, DPI and the notification icon, and remain inside the monitor's work area.
+- **Configurable close delay**: **Close popup after** applies to both automatic and
+  manually opened views: 3, 5, 6, 10, 15, 30 or 60 seconds. Your selection survives
+  restarts. Background usage refreshes do not extend the timer.
+- **No tooltip overlap**: the native tray tooltip is hidden while a popup is visible
+  and restored once it closes.
+- **Pace marker**: a tick on each bar shows how much of the window's time has passed.
+  A bar past its tick means you'll hit the limit before it resets.
 - **Details panel**: separate provider panels, reported quota windows, reset times, and independent
   24-hour and 7-day history charts. Claude also shows this week's usage by product when available.
 - **Alerts**: Windows notifications at 80% and 95%, and when a limit you'd been close to resets.
 - **Fresh numbers**: refreshes on a schedule, within a minute of Claude Code or Codex activity, and right after
   a limit resets, backing off automatically if the API rate-limits.
-- **Multi-monitor**: a meter on every taskbar, plus a tray icon with tooltip and menu.
-- **Lightweight**: a single executable with no installer. Codex usage uses your existing Codex CLI.
+- **Tray-only**: no taskbar widget or overlay windows. The popup follows the primary
+  notification icon and remains inside that monitor's work area.
+- **Lightweight**: one native executable, installed or updated with npx. Codex usage uses your existing Codex CLI.
 - **Start with Windows**: enabled on first launch for new users; turn it off from the
   right-click menu at any time. Existing startup preferences are preserved.
-- **About**: right-click the meter or tray icon for the app version, developer credits,
+- **About**: right-click the popup or tray icon for the app version, developer credits,
   and a link to this repository.
+
+Existing installations using the previous always-visible default switch to the
+quieter milestone mode once on upgrade. You can opt back into always-show after
+updating; that explicit choice is retained. See [popup behavior](docs/POPUP_BEHAVIOR.md).
 
 ## See it in action
 
 <div align="center">
-<img src="docs/images/burnbar-demo.gif" alt="BurnBar on Windows, showing the rotating taskbar meter and Claude and Codex usage details" width="848">
+<img src="docs/images/milestone-popup-light.png" alt="BurnBar milestone popup, light theme" width="400">
+<img src="docs/images/milestone-popup-dark.png" alt="BurnBar milestone popup, dark theme" width="400">
 <br>
-<sub>BurnBar in action: Claude and Codex usage on the taskbar, with details a click away.</sub>
+<sub>Rendered demo previews: a milestone notice that closes automatically. Click to inspect details.</sub>
 </div>
 
 ## Installation
@@ -71,33 +89,47 @@ You need Windows 10 or 11 and a signed-in provider:
   (`codex login`). API-key-only accounts do not provide these subscription usage limits.
   BurnBar also detects the CLI bundled with the Windows Codex desktop app when available.
 
-Both providers rotate through the meter by default. A missing login affects only that provider. Select
+Both providers are available from the tray; automatic notices show the affected provider. A missing login affects only that provider. Select
 **Usage providers** from the right-click menu to hide a provider you don't use.
 
-### Install or update with PowerShell
+### Install or update with npx
 
-Run this in a regular PowerShell window; administrator access is not needed:
-
-```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/nooblk-98/burnbar/main/install.ps1)))
-```
-
-The same command installs or updates the **latest stable release** in
-`%LOCALAPPDATA%\Programs\BurnBar`, verifies its SHA-256 checksum, adds a Start menu
-shortcut, and launches BurnBar. Existing settings and history are kept. A running
-BurnBar instance in your session is closed after the download is verified.
-
-You can [review the installer](install.ps1) before running it. To choose a folder
-or install without launching:
+Requires [Node.js 22+](https://nodejs.org/) (includes npm/npx) and Windows PowerShell
+5.1. BurnBar itself does not need Node.js after installation. No administrator
+access or npm login is required.
 
 ```powershell
-$installer = irm https://raw.githubusercontent.com/nooblk-98/burnbar/main/install.ps1
-& ([scriptblock]::Create($installer)) -InstallDir 'D:\Apps\BurnBar' -NoStart
+# Install or update the latest stable release
+npx --yes burnbar@latest install
+
+# Install or update the latest development build (may contain bugs)
+npx --yes burnbar@development install
+
+# Explicitly switch an existing development installation back to stable
+npx --yes burnbar@latest update --channel stable
 ```
 
-For a manual install, download `burnbar.exe` from the
-[releases page](https://github.com/nooblk-98/burnbar/releases), put it anywhere,
-and run it.
+The `latest` npm channel selects stable binaries; `development` selects development
+prereleases. Stable npm packages and GitHub binaries are published together from
+version tags on main. Development packages are published from development pushes.
+
+`install` and `update` perform the same verified process. Running the command
+again updates the executable; there is no background auto-updater. Switching
+channels preserves settings, history and startup preferences.
+
+```powershell
+# Optional: another folder, without launching
+npx --yes burnbar@latest update --install-dir 'D:\Apps\BurnBar' --no-start
+
+# Check release metadata without installing
+npx --yes burnbar@development install --dry-run
+```
+
+Both channels install into `%LOCALAPPDATA%\Programs\BurnBar` by default, verify
+SHA-256 before replacement, and create a Start menu shortcut. The reviewed Windows
+helper is bundled inside the npm package; no remote script is fetched and executed.
+`--dry-run` changes no files or running processes. Development builds may contain
+bugs; stable installs exclude prereleases. See [release setup](docs/RELEASING.md).
 
 On its first normal launch, BurnBar enables **Start with Windows** for a new profile.
 You can disable it from the right-click menu. Demo and diagnostic modes do not enable it.
@@ -118,8 +150,7 @@ You can disable it from the right-click menu. Demo and diagnostic modes do not e
 2. Open **Windows Security > App & browser control > Smart App Control settings**.
 3. If you trust the download and choose to proceed, select **Off** before running
    BurnBar. Read the confirmation carefully.
-4. Download `burnbar.exe` from this repository's releases, place it in your preferred
-   folder, and run it. BurnBar is portable and has no installer.
+4. Run the npx install command above again, then launch BurnBar.
 5. Afterwards, return to **Smart App Control settings** and select **On**, if
    available. Restart if Windows asks, and confirm protection is on.
 
@@ -148,8 +179,7 @@ The executable also accepts a few flags for development:
 |---|---|
 | `-demo` | Show sample numbers and history without calling the API |
 | `-providers both` | Show Claude and Codex; also accepts `claude` or `codex`. Defaults to the saved menu setting. |
-| `-taskbar-layout` | Print measured taskbar spans and the compact meter's available slot, then exit. Useful for diagnosing placement. |
-| `-snapshot <dir>` | Render PNG previews and the provider-rotation GIF in both themes, then exit. Combine with `-demo -providers both`. |
+| `-snapshot <dir>` | Render popup PNG previews in both themes, then exit. Combine with `-demo -providers both`. |
 | `-once` | Print usage summaries for the selected providers, then exit. Needs a console build: `go build -o bin\burnbar-cli.exe ./cmd/burnbar` |
 
 > [!WARNING]
@@ -161,11 +191,12 @@ The executable also accepts a few flags for development:
 
 ```
 cmd/burnbar/          entry point, flags, embedded icon and manifest
-internal/app/         Windows UI: taskbar meters, tray icon, details panel, menu, Win32 and UI Automation
+internal/app/         Windows UI: tray icon, timed popups, details panel, menus and Win32
 internal/usage/       Claude usage client and Codex app-server account client
 internal/render/      drawing the meter, details panel, charts and tray icon
-internal/layout/      choosing a free spot on the taskbar
+internal/layout/      popup placement and fullscreen visibility
 internal/config/      settings and alert state
+internal/alerts/      milestone deduplication and popup lifetime
 internal/history/     usage history for the charts
 tools/genres/         icon and Windows resource generator
 assets/               app icon

@@ -6,16 +6,19 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/nooblk-98/burnbar/internal/alerts"
 	"github.com/nooblk-98/burnbar/internal/usage"
 )
 
 type Config struct {
-	Providers       string `json:"providers"` // "claude", "codex" or "both"
-	ShowOverlay     bool   `json:"showOverlay"`
-	AllMonitors     bool   `json:"allMonitors"`
-	Position        string `json:"position"` // "auto", "left" or "right" (next to the tray)
-	IntervalMinutes int    `json:"intervalMinutes"`
-	Alerts          bool   `json:"alerts"`
+	Providers            string         `json:"providers"` // "claude", "codex" or "both"
+	PopupSeconds         int            `json:"popupSeconds"`
+	PopupBehaviorVersion int            `json:"popupBehaviorVersion"`
+	MilestonePopups      bool           `json:"milestonePopups"`
+	MilestoneState       alerts.Tracker `json:"milestoneState,omitempty"`
+	AlwaysShowPopup      bool           `json:"alwaysShowPopup"`
+	IntervalMinutes      int            `json:"intervalMinutes"`
+	Alerts               bool           `json:"alerts"`
 	// Nil identifies a legacy profile whose preference still lives in the registry.
 	StartWithWindows *bool `json:"startWithWindows,omitempty"`
 
@@ -31,7 +34,7 @@ type AlertState struct {
 
 func Default() Config {
 	startup := true
-	return Config{Providers: "both", ShowOverlay: true, AllMonitors: true, Position: "auto", IntervalMinutes: 3, Alerts: true, StartWithWindows: &startup}
+	return Config{Providers: "both", PopupSeconds: alerts.DefaultPopupSeconds, PopupBehaviorVersion: 1, MilestoneState: alerts.Tracker{}, MilestonePopups: true, AlwaysShowPopup: false, IntervalMinutes: 3, Alerts: true, StartWithWindows: &startup}
 }
 
 // Dir is the folder holding settings and history; it is created if missing.
@@ -56,12 +59,20 @@ func Load() Config {
 	if b, err := os.ReadFile(path()); err == nil {
 		// Existing profiles without this field must retain their registry choice.
 		c.StartWithWindows = nil
+		c.PopupBehaviorVersion = 0
 		json.Unmarshal(b, &c)
 	}
-	switch c.Position {
-	case "auto", "left", "right":
-	default:
-		c.Position = "auto"
+	// One-time migration away from the previous always-visible default. A later
+	// explicit Always show selection is retained by this behavior version.
+	if c.PopupBehaviorVersion < 1 {
+		c.AlwaysShowPopup = false
+		c.PopupBehaviorVersion = 1
+	}
+	if c.PopupSeconds < 1 || c.PopupSeconds > 300 {
+		c.PopupSeconds = alerts.DefaultPopupSeconds
+	}
+	if c.MilestoneState == nil {
+		c.MilestoneState = alerts.Tracker{}
 	}
 	if c.IntervalMinutes < 1 {
 		c.IntervalMinutes = 3
