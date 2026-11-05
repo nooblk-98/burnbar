@@ -1,6 +1,6 @@
 # BurnBar roadmap
 
-BurnBar currently supports Claude and Codex on the Windows taskbar. More AI tool
+BurnBar currently supports Claude and Codex in the Windows notification area. More AI tool
 support is the next main direction. Priorities depend on community requests,
 maintainer time, and whether a tool exposes a reliable way to read usage limits;
 there are no promised release dates.
@@ -8,8 +8,8 @@ there are no promised release dates.
 ## Available now
 
 - Claude and Codex quota windows, reset times, and usage history.
-- A compact meter with provider rotation, alerts, and a details panel.
-- Light/dark themes, display scaling, multiple taskbars, and adaptive placement.
+- Brief milestone notices, configurable popup timers, alerts, and a details panel.
+- Light/dark themes, display scaling, tray anchoring and work-area clamping.
 
 ## Next priorities
 
@@ -17,7 +17,7 @@ there are no promised release dates.
 | --- | --- | --- |
 | Evaluate additional AI tools and their usage sources | Accepting requests | [Request an AI tool](https://github.com/nooblk-98/burnbar/issues/new?template=02-ai-tool-request.yml) |
 | Make adding providers simpler across fetching, settings, and rendering | Planned groundwork | [Discuss an implementation](https://github.com/nooblk-98/burnbar/issues/new?title=Provider%20integration%20groundwork&labels=enhancement) |
-| Improve coverage of Windows taskbar layouts and scaling combinations | Ongoing | [Report a reproducible issue](https://github.com/nooblk-98/burnbar/issues/new?template=01-bug-report.yml) |
+| Improve coverage of tray popup layouts, timeouts and scaling combinations | Ongoing | [Report a reproducible issue](https://github.com/nooblk-98/burnbar/issues/new?template=01-bug-report.yml) |
 
 ## AI tool request queue
 

@@ -2,18 +2,28 @@ package alerts
 
 import "time"
 
-const PopupDuration = 6 * time.Second
+const DefaultPopupSeconds = 6
 
-// PopupLifetime distinguishes an automatic notice from a manual view. More
-// milestones can update an open notice but must never keep extending its life.
-type PopupLifetime struct{ Deadline time.Time }
-
-func (p *PopupLifetime) Start(now time.Time) {
-	if p.Deadline.IsZero() {
-		p.Deadline = now.Add(PopupDuration)
-	}
+// PopupLifetime keeps automatic coalescing separate from deliberate interaction.
+// Background refreshes never extend a notice; a user action starts a fresh timer.
+type PopupLifetime struct {
+	Deadline        time.Time
+	AutomaticNotice bool
 }
-func (p *PopupLifetime) Manual()                              { p.Deadline = time.Time{} }
-func (p PopupLifetime) Automatic() bool                       { return !p.Deadline.IsZero() }
+
+func (p *PopupLifetime) StartAutomatic(now time.Time, duration time.Duration) {
+	if p.Deadline.IsZero() {
+		p.Deadline = now.Add(duration)
+	}
+	p.AutomaticNotice = true
+}
+func (p *PopupLifetime) StartManual(now time.Time, duration time.Duration) {
+	p.Deadline = now.Add(duration)
+	p.AutomaticNotice = false
+}
+func (p *PopupLifetime) Clear()                               { *p = PopupLifetime{} }
+func (p PopupLifetime) Automatic() bool                       { return p.AutomaticNotice && !p.Deadline.IsZero() }
 func (p PopupLifetime) Remaining(now time.Time) time.Duration { return max(0, p.Deadline.Sub(now)) }
-func (p PopupLifetime) Due(now time.Time) bool                { return p.Automatic() && !now.Before(p.Deadline) }
+func (p PopupLifetime) Due(now time.Time) bool {
+	return !p.Deadline.IsZero() && !now.Before(p.Deadline)
+}

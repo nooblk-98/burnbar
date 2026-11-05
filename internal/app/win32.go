@@ -10,10 +10,13 @@ import (
 )
 
 var (
-	user32   = windows.NewLazySystemDLL("user32.dll")
-	gdi32    = windows.NewLazySystemDLL("gdi32.dll")
-	shell32  = windows.NewLazySystemDLL("shell32.dll")
-	kernel32 = windows.NewLazySystemDLL("kernel32.dll")
+	user32          = windows.NewLazySystemDLL("user32.dll")
+	gdi32           = windows.NewLazySystemDLL("gdi32.dll")
+	shell32         = windows.NewLazySystemDLL("shell32.dll")
+	kernel32        = windows.NewLazySystemDLL("kernel32.dll")
+	ole32           = windows.NewLazySystemDLL("ole32.dll")
+	pCoInitializeEx = ole32.NewProc("CoInitializeEx")
+	pCoUninitialize = ole32.NewProc("CoUninitialize")
 
 	pRegisterClassExW              = user32.NewProc("RegisterClassExW")
 	pCreateWindowExW               = user32.NewProc("CreateWindowExW")
@@ -25,13 +28,9 @@ var (
 	pPostMessageW                  = user32.NewProc("PostMessageW")
 	pMessageBoxW                   = user32.NewProc("MessageBoxW")
 	pFindWindowW                   = user32.NewProc("FindWindowW")
-	pFindWindowExW                 = user32.NewProc("FindWindowExW")
 	pGetWindowRect                 = user32.NewProc("GetWindowRect")
-	pGetWindow                     = user32.NewProc("GetWindow")
 	pGetForegroundWindow           = user32.NewProc("GetForegroundWindow")
 	pGetClassNameW                 = user32.NewProc("GetClassNameW")
-	pIsWindowVisible               = user32.NewProc("IsWindowVisible")
-	pSetWindowPos                  = user32.NewProc("SetWindowPos")
 	pShowWindow                    = user32.NewProc("ShowWindow")
 	pSetTimer                      = user32.NewProc("SetTimer")
 	pGetDC                         = user32.NewProc("GetDC")
@@ -51,14 +50,11 @@ var (
 	pGetDpiForWindow               = user32.NewProc("GetDpiForWindow")
 	pGetSystemMetricsForDpi        = user32.NewProc("GetSystemMetricsForDpi")
 	pGetSystemMetrics              = user32.NewProc("GetSystemMetrics")
-	pTrackMouseEvent               = user32.NewProc("TrackMouseEvent")
 	pSetWinEventHook               = user32.NewProc("SetWinEventHook")
 	pKillTimer                     = user32.NewProc("KillTimer")
-	pDestroyWindow                 = user32.NewProc("DestroyWindow")
 	pMonitorFromWindow             = user32.NewProc("MonitorFromWindow")
 	pGetMonitorInfoW               = user32.NewProc("GetMonitorInfoW")
 	pLoadImageW                    = user32.NewProc("LoadImageW")
-	pSystemParametersInfoW         = user32.NewProc("SystemParametersInfoW")
 
 	pCreateCompatibleDC = gdi32.NewProc("CreateCompatibleDC")
 	pCreateDIBSection   = gdi32.NewProc("CreateDIBSection")
@@ -76,63 +72,51 @@ var (
 )
 
 const (
-	WS_POPUP             = 0x80000000
-	GW_OWNER             = 4
-	WS_EX_LAYERED        = 0x00080000
-	WS_EX_TOOLWINDOW     = 0x00000080
-	WS_EX_TOPMOST        = 0x00000008
-	WS_EX_NOACTIVATE     = 0x08000000
-	WM_DESTROY           = 0x0002
-	WM_CLOSE             = 0x0010
-	WM_TIMER             = 0x0113
-	WM_COMMAND           = 0x0111
-	WM_MOUSEMOVE         = 0x0200
-	WM_LBUTTONDOWN       = 0x0201
-	WM_LBUTTONUP         = 0x0202
-	WM_RBUTTONUP         = 0x0205
-	WM_MOUSELEAVE        = 0x02A3
-	WM_NULL              = 0x0000
-	WM_CONTEXTMENU       = 0x007B
-	NIN_SELECT           = 0x0400
-	NIN_KEYSELECT        = 0x0401
-	WM_APP               = 0x8000
-	SW_HIDE              = 0
-	SW_SHOWNORMAL        = 1
-	SW_SHOWNOACTIVATE    = 4
-	SWP_NOSIZE           = 0x0001
-	SWP_NOMOVE           = 0x0002
-	SWP_NOACTIVATE       = 0x0010
-	SWP_SHOWWINDOW       = 0x0040
-	HWND_TOPMOST         = ^uintptr(0) // (HWND)-1
-	ULW_ALPHA            = 0x02
-	AC_SRC_ALPHA         = 0x01
-	MF_STRING            = 0x0000
-	MF_CHECKED           = 0x0008
-	MF_GRAYED            = 0x0001
-	MF_SEPARATOR         = 0x0800
-	TPM_RETURNCMD        = 0x0100
-	TPM_RIGHTBUTTON      = 0x0002
-	TPM_BOTTOMALIGN      = 0x0020
-	NIM_ADD              = 0
-	NIM_MODIFY           = 1
-	NIM_DELETE           = 2
-	NIM_SETVERSION       = 4
-	NOTIFYICON_VERSION_4 = 4
-	NIF_MESSAGE          = 0x01
-	NIF_ICON             = 0x02
-	NIF_TIP              = 0x04
-	NIF_SHOWTIP          = 0x80
-	TME_LEAVE            = 0x02
-	SM_CXSMICON          = 49
-	SM_CXDRAG            = 68
-	SM_CYDRAG            = 69
-	IDC_ARROW            = 32512
-	EVENT_SYS_FOREGND    = 0x0003
-	WINEVENT_OUTOFCTX    = 0x0000
-	DPI_PER_MONITOR_V2   = ^uintptr(3) // (DPI_AWARENESS_CONTEXT)-4
-	QUNS_BUSY            = 2
-	QUNS_D3D_FULLSCREEN  = 3
-	QUNS_PRESENTATION    = 4
+	coinitApartmentThreaded = 0x2
+	WS_POPUP                = 0x80000000
+	WS_EX_LAYERED           = 0x00080000
+	WS_EX_TOOLWINDOW        = 0x00000080
+	WS_EX_TOPMOST           = 0x00000008
+	WM_DESTROY              = 0x0002
+	WM_CLOSE                = 0x0010
+	WM_TIMER                = 0x0113
+	WM_MOUSEMOVE            = 0x0200
+	WM_LBUTTONDOWN          = 0x0201
+	WM_LBUTTONUP            = 0x0202
+	WM_RBUTTONUP            = 0x0205
+	WM_NULL                 = 0x0000
+	WM_CONTEXTMENU          = 0x007B
+	NIN_SELECT              = 0x0400
+	NIN_KEYSELECT           = 0x0401
+	WM_APP                  = 0x8000
+	SW_HIDE                 = 0
+	SW_SHOWNORMAL           = 1
+	SW_SHOWNOACTIVATE       = 4
+	ULW_ALPHA               = 0x02
+	AC_SRC_ALPHA            = 0x01
+	MF_STRING               = 0x0000
+	MF_CHECKED              = 0x0008
+	MF_GRAYED               = 0x0001
+	MF_SEPARATOR            = 0x0800
+	TPM_RETURNCMD           = 0x0100
+	TPM_RIGHTBUTTON         = 0x0002
+	TPM_BOTTOMALIGN         = 0x0020
+	NIM_ADD                 = 0
+	NIM_MODIFY              = 1
+	NIM_DELETE              = 2
+	NIM_SETVERSION          = 4
+	NOTIFYICON_VERSION_4    = 4
+	NIF_MESSAGE             = 0x01
+	NIF_ICON                = 0x02
+	NIF_TIP                 = 0x04
+	NIF_SHOWTIP             = 0x80
+	SM_CXSMICON             = 49
+	SM_CXDRAG               = 68
+	SM_CYDRAG               = 69
+	IDC_ARROW               = 32512
+	EVENT_SYS_FOREGND       = 0x0003
+	WINEVENT_OUTOFCTX       = 0x0000
+	DPI_PER_MONITOR_V2      = ^uintptr(3) // (DPI_AWARENESS_CONTEXT)-4
 
 	WM_ACTIVATE             = 0x0006
 	WM_KEYDOWN              = 0x0100
@@ -144,10 +128,6 @@ const (
 	NIIF_INFO               = 0x1
 	NIIF_WARNING            = 0x2
 	NIIF_RESPECT_QUIET_TIME = 0x80
-	EVENT_OBJECT_DESTROY    = 0x8001
-	EVENT_OBJECT_HIDE       = 0x8003
-	WINEVENT_SKIPOWNPROCESS = 0x0002
-	OBJID_WINDOW            = 0
 	MONITOR_DEFAULTTONEAR   = 2
 	IMAGE_ICON              = 1
 	LR_DEFAULTSIZE          = 0x40
@@ -248,13 +228,6 @@ type NOTIFYICONDATAW struct {
 	DwInfoFlags      uint32
 	GuidItem         windows.GUID
 	HBalloonIcon     uintptr
-}
-
-type TRACKMOUSEEVENT struct {
-	CbSize      uint32
-	DwFlags     uint32
-	HwndTrack   uintptr
-	DwHoverTime uint32
 }
 
 func utf16(s string) *uint16 {

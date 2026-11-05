@@ -1,7 +1,7 @@
 {
   "name": "burnbar",
   "version": "0.0.0",
-  "description": "Install or update the BurnBar Windows taskbar usage meter",
+  "description": "Install or update the BurnBar Windows tray usage monitor",
   "license": "MIT",
   "repository": {
     "type": "git",

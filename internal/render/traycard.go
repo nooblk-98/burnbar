@@ -13,14 +13,18 @@ import (
 
 // TrayCard is the small persistent overview; the full charts remain a click away.
 func TrayCard(scale float64, readings []usage.Usage, th Theme) *image.RGBA {
-	return trayCard(scale, readings, th, "")
+	return trayCard(scale, readings, th, "", false)
 }
 
 func TrayMilestoneCard(scale float64, readings []usage.Usage, th Theme, notice string) *image.RGBA {
-	return trayCard(scale, readings, th, notice)
+	return trayCard(scale, readings, th, notice, false)
 }
 
-func trayCard(scale float64, readings []usage.Usage, th Theme, notice string) *image.RGBA {
+func TrayPinnedCard(scale float64, readings []usage.Usage, th Theme) *image.RGBA {
+	return trayCard(scale, readings, th, "", true)
+}
+
+func trayCard(scale float64, readings []usage.Usage, th Theme, notice string, persistent bool) *image.RGBA {
 	noticeFace := faceFor(11*scale, true)
 	lines := wrapText(noticeFace, notice, 292*scale)
 	if len(lines) > 2 {
@@ -62,9 +66,9 @@ func trayCard(scale float64, readings []usage.Usage, th Theme, notice string) *i
 			}
 		}
 	}
-	footer := "Click for details · right-click for options"
-	if notice != "" {
-		footer = "Auto closes · click to keep open"
+	footer := "Auto closes · click for details"
+	if persistent {
+		footer = "Always shown · click for details"
 	}
 	drawText(img, small, footer, 14*scale, float64(h)-11*scale, th.sub)
 	return img

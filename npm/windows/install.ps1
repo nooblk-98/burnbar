@@ -147,7 +147,7 @@ try {
         $shortcut.TargetPath = $targetExe
         $shortcut.WorkingDirectory = $installPath
         $shortcut.IconLocation = "$targetExe,0"
-        $shortcut.Description = 'Claude and Codex usage monitor for the Windows taskbar'
+        $shortcut.Description = 'Claude and Codex usage monitor for the Windows notification area'
         $shortcut.Save()
     } catch {
         Write-Warning "BurnBar is installed, but its Start menu shortcut could not be created: $($_.Exception.Message)"

@@ -6,7 +6,6 @@ import (
 	"image/draw"
 	"math"
 	"strings"
-	"time"
 
 	"github.com/nooblk-98/burnbar/internal/history"
 	"github.com/nooblk-98/burnbar/internal/usage"
@@ -43,63 +42,6 @@ func wrapText(face font.Face, text string, width float64) []string {
 		lines = append(lines, strings.TrimSpace(line))
 	}
 	return lines
-}
-
-func GroupWidgetSize(scale float64, count int) (int, int) {
-	return WidgetSize(scale)
-}
-
-// GroupWidget renders the first provider; the app rotates the active provider.
-func GroupWidget(scale float64, readings []usage.Usage, th Theme, hover bool) *image.RGBA {
-	if len(readings) > 0 {
-		return ProviderWidget(scale, readings[0], th, hover)
-	}
-	return ProviderWidget(scale, usage.Usage{}, th, hover)
-}
-
-// ProviderWidget fits a provider caption and two quota rows into the original footprint.
-func ProviderWidget(scale float64, u usage.Usage, th Theme, hover bool) *image.RGBA {
-	w, _ := WidgetSize(scale)
-	return ProviderWidgetSized(scale, u, th, hover, w)
-}
-
-func MinimumWidgetWidth(scale float64) int { return int(math.Ceil(96 * scale)) }
-
-// ProviderWidgetSized keeps text readable while shortening the meter tracks.
-func ProviderWidgetSized(scale float64, u usage.Usage, th Theme, hover bool, width int) *image.RGBA {
-	_, h := WidgetSize(scale)
-	w := max(width, MinimumWidgetWidth(scale))
-	img := image.NewRGBA(image.Rect(0, 0, w, h))
-	for i := 3; i < len(img.Pix); i += 4 {
-		img.Pix[i] = 1
-	}
-	caption := faceFor(8.5*scale, true)
-	drawText(img, caption, strings.ToUpper(u.Name()), scale, 8*scale, th.sub)
-	face := faceFor(10.5*scale, true)
-	for i, win := range []*usage.Window{u.FiveHour, u.SevenDay} {
-		cy := (18 + float64(i)*13) * scale
-		baseline := cy + capHeight(face)/2
-		fallback := []string{"5h", "7d"}[i]
-		if u.Provider == usage.Codex {
-			fallback = []string{"1st", "2nd"}[i]
-		}
-		label := usage.WindowShortLabel(win, fallback)
-		drawText(img, face, label, scale, baseline, th.sub)
-		bx := math.Max(23*scale, textWidth(face, label)+3*scale)
-		drawMeter(img, bx, cy-2.5*scale, float64(w)-42*scale, cy+2.5*scale, win, th, scale)
-		value := "–"
-		if u.Err != "" && win == nil {
-			value = "!"
-		}
-		if win != nil {
-			value = fmt.Sprintf("%.0f%%", win.Percent)
-			if hover && !win.ResetsAt.IsZero() {
-				value = shortDuration(time.Until(win.ResetsAt))
-			}
-		}
-		drawTextRight(img, face, value, float64(w)-scale, baseline, barColor(win))
-	}
-	return img
 }
 
 // GroupPopup displays independent provider panels. If a full view cannot fit the
@@ -198,4 +140,12 @@ func GroupTooltip(readings []usage.Usage) string {
 		lines = append(lines, u.Name()+": "+strings.Join(values, " / "))
 	}
 	return strings.Join(lines, "\n")
+}
+
+// PopupAwareTooltip avoids a redundant native tooltip covering a visible card.
+func PopupAwareTooltip(readings []usage.Usage, popupVisible bool) string {
+	if popupVisible {
+		return ""
+	}
+	return GroupTooltip(readings)
 }

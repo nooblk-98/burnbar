@@ -4,8 +4,9 @@
 
 BurnBar normally stays in the notification area. On each successful fetch, it
 tracks the provider's two main quota windows separately (typically session/5h and
-weekly/7d). A new 10% boundary, up through 100%, opens one compact notice for six
-seconds without activating the window. A 12% → 43% jump shows 40% once, not three
+weekly/7d). A new 10% boundary, up through 100%, opens one compact notice without
+activating the window. The saved close delay (six seconds by default) applies to
+both automatic notices and manually opened views. A 12% → 43% jump shows 40% once, not three
 successive notices. More events during an existing notice update it without
 extending the original deadline. Only affected providers are shown automatically.
 
@@ -28,23 +29,32 @@ queue a backlog. Fullscreen hides an existing automatic card and cancels it.
 ## Manual inspection and preferences
 
 - Click the tray icon to open the overview; click the card for full details.
-- Clicking an automatic notice promotes it to a manual view and cancels its timer.
-- Manual views have no six-second timeout. Clicking elsewhere, Esc or Alt+F4 closes
-  them. A stale timer from an earlier notice cannot close a manual view.
-- Right-click → **Milestone popups (10% steps, 6 sec)** controls automatic cards.
+- Clicking an automatic notice promotes it to a timed manual view and restarts the configured delay.
+- Manual views close after the same selected delay. Deliberate clicks restart the
+  timer; background fetches do not. Clicking elsewhere, Esc or Alt+F4 closes them
+  sooner. A stale earlier timer cannot close a newly reopened view prematurely.
+- Right-click → **Milestone popups (10% steps)** controls automatic cards.
   Disable it for tray-click-only behavior.
+- **Close popup after** offers 3, 5, 6, 10, 15, 30 and 60 seconds; it is saved across
+  restarts and applies to all ordinary popup openings.
 - **Always show popup (optional)** restores persistent display without a timeout;
-  closing details in that mode returns to the compact overview. Disabling it
+  details still time out back to the compact overview in that explicit mode. Disabling it
   hides the card immediately.
 - Existing Windows 80%/95%/reset notifications have a separate **Windows alerts**
-  switch. Taskbar meters remain optional and retain existing settings.
+  switch. The taskbar widget, placement worker, animation and menu settings have been
+  removed. Only the notification icon and popups remain.
 
 ## Upgrade
 
 Profiles without `popupBehaviorVersion` use the old always-visible default. On
 this upgrade, that setting switches off once and milestone popups default on.
-Other preferences and histories are preserved. Once the behavior version is saved,
+Other preferences and histories are preserved; obsolete widget settings are ignored
+and removed when saving. Once the behavior version is saved,
 an explicit always-show or milestone opt-out survives future launches.
+
+The native tray tooltip is cleared, including its SHOWTIP flag, while any popup is
+visible and restored on hide so it cannot overlap the card. This is independent
+of Windows usage-alert balloons.
 
 ## Verification limits
 

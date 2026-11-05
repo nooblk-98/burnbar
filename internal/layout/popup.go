@@ -1,5 +1,8 @@
 package layout
 
+// Rect matches the Win32 RECT memory layout.
+type Rect struct{ Left, Top, Right, Bottom int32 }
+
 // PlacePopup keeps a tray card inside the working area, including monitors with
 // negative origins. Top taskbars open downwards; all other edges open upwards.
 func PlacePopup(work, anchor Rect, width, height, gap int) (bounds Rect, tailTop bool) {

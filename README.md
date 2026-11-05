@@ -31,7 +31,7 @@ Codex window lengths come from your account rather than assuming every plan uses
 
 - **Brief milestone popups**: by default, a small framed card appears when either
   provider's primary/session or secondary/weekly quota crosses **10%, 20%, … 100%**.
-  It shows the affected provider, takes no focus, and closes after **6 seconds**.
+  It shows the affected provider, takes no focus, and closes after the selected delay (**6 seconds** by default).
   More updates do not keep extending it. Jumps show only the highest new milestone,
   not a burst of every skipped threshold.
 - **Quiet by default**: first readings establish a baseline instead of replaying
@@ -39,16 +39,19 @@ Codex window lengths come from your account rather than assuming every plan uses
   quota resets rearm the tracker. Crossings are detected on the next successful
   refresh, not continuously between API reads.
 - **Your choice**: click the tray icon any time to inspect usage; click an automatic
-  notice to keep it open and show details. Right-click → **Milestone popups (10% steps,
-  6 sec)** disables automatic cards for click-only use. **Always show popup (optional)**
+  notice for details. Manual popups also close after the selected delay; clicks restart
+  their timer. Right-click → **Milestone popups (10% steps)** disables automatic
+  cards for click-only use. **Always show popup (optional)**
   restores a persistent overview if preferred. Esc or clicking elsewhere closes
   manual views unless always-show is enabled.
 - **Fullscreen-aware**: no automatic popup appears over a fullscreen app, and missed
   milestones are not queued to interrupt you afterwards. Cards follow light/dark
   theme, DPI and the notification icon, and remain inside the monitor's work area.
-- **Optional taskbar meter**: enable **Show taskbar meter (optional)** for the rotating
-  compact bars. Existing taskbar preferences are preserved when updating; new profiles
-  use the tray and brief notices instead. Bars turn red at 90%.
+- **Configurable close delay**: **Close popup after** applies to both automatic and
+  manually opened views: 3, 5, 6, 10, 15, 30 or 60 seconds. Your selection survives
+  restarts. Background usage refreshes do not extend the timer.
+- **No tooltip overlap**: the native tray tooltip is hidden while a popup is visible
+  and restored once it closes.
 - **Pace marker**: a tick on each bar shows how much of the window's time has passed.
   A bar past its tick means you'll hit the limit before it resets.
 - **Details panel**: separate provider panels, reported quota windows, reset times, and independent
@@ -56,11 +59,12 @@ Codex window lengths come from your account rather than assuming every plan uses
 - **Alerts**: Windows notifications at 80% and 95%, and when a limit you'd been close to resets.
 - **Fresh numbers**: refreshes on a schedule, within a minute of Claude Code or Codex activity, and right after
   a limit resets, backing off automatically if the API rate-limits.
-- **Multi-monitor**: the popup follows the primary notification icon; optional meters can appear on every taskbar.
+- **Tray-only**: no taskbar widget or overlay windows. The popup follows the primary
+  notification icon and remains inside that monitor's work area.
 - **Lightweight**: one native executable, installed or updated with npx. Codex usage uses your existing Codex CLI.
 - **Start with Windows**: enabled on first launch for new users; turn it off from the
   right-click menu at any time. Existing startup preferences are preserved.
-- **About**: right-click the meter or tray icon for the app version, developer credits,
+- **About**: right-click the popup or tray icon for the app version, developer credits,
   and a link to this repository.
 
 Existing installations using the previous always-visible default switch to the
@@ -75,13 +79,6 @@ updating; that explicit choice is retained. See [popup behavior](docs/POPUP_BEHA
 <br>
 <sub>Rendered demo previews: a milestone notice that closes automatically. Click to inspect details.</sub>
 </div>
-
-<details>
-<summary>Optional taskbar meter demo</summary>
-
-<img src="docs/images/burnbar-demo.gif" alt="The optional rotating taskbar meter and usage details" width="848">
-
-</details>
 
 ## Installation
 
@@ -187,8 +184,7 @@ The executable also accepts a few flags for development:
 |---|---|
 | `-demo` | Show sample numbers and history without calling the API |
 | `-providers both` | Show Claude and Codex; also accepts `claude` or `codex`. Defaults to the saved menu setting. |
-| `-taskbar-layout` | Print measured taskbar spans and the compact meter's available slot, then exit. Useful for diagnosing placement. |
-| `-snapshot <dir>` | Render PNG previews and the provider-rotation GIF in both themes, then exit. Combine with `-demo -providers both`. |
+| `-snapshot <dir>` | Render popup PNG previews in both themes, then exit. Combine with `-demo -providers both`. |
 | `-once` | Print usage summaries for the selected providers, then exit. Needs a console build: `go build -o bin\burnbar-cli.exe ./cmd/burnbar` |
 
 > [!WARNING]
@@ -200,10 +196,10 @@ The executable also accepts a few flags for development:
 
 ```
 cmd/burnbar/          entry point, flags, embedded icon and manifest
-internal/app/         Windows UI: taskbar meters, tray icon, details panel, menu, Win32 and UI Automation
+internal/app/         Windows UI: tray icon, timed popups, details panel, menus and Win32
 internal/usage/       Claude usage client and Codex app-server account client
 internal/render/      drawing the meter, details panel, charts and tray icon
-internal/layout/      choosing a free spot on the taskbar
+internal/layout/      popup placement and fullscreen visibility
 internal/config/      settings and alert state
 internal/alerts/      milestone deduplication and popup lifetime
 internal/history/     usage history for the charts

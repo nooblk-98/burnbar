@@ -20,27 +20,21 @@ import (
 )
 
 const (
-	msgUsage         = WM_APP + 1 // background fetch finished
-	msgTray          = WM_APP + 2 // notification-area icon callback
-	msgMenu          = WM_APP + 3 // overlay or popup asks for the context menu
-	msgActivity      = WM_APP + 4 // a provider wrote to its session logs
-	msgTaskbarLayout = WM_APP + 5 // the MTA worker finished an Explorer query
-	msgShellEvent    = WM_APP + 6 // deferred WinEvent hook processing
-	msgTrayAction    = WM_APP + 7 // deferred tray click/menu processing
+	msgUsage      = WM_APP + 1 // background fetch finished
+	msgTray       = WM_APP + 2 // notification-area icon callback
+	msgMenu       = WM_APP + 3 // popup asks for the context menu
+	msgActivity   = WM_APP + 4 // a provider wrote to its session logs
+	msgShellEvent = WM_APP + 6 // deferred WinEvent hook processing
+	msgTrayAction = WM_APP + 7 // deferred tray click/menu processing
 
-	timerLayout   = 1 // 1s: z-order, fullscreen check, cached placement
-	timerRefresh  = 2 // regular usage refresh
-	timerRelayout = 3 // shortly after windows open or close
-	timerReset    = 4 // just after the next limit resets
-	timerActive   = 5 // deferred refresh for providers with session activity
-	timerRotate   = 6 // switch the compact meter to the next provider
-	timerFlip     = 7 // animate only while a flip is in progress
-	timerPopup    = 8 // auto-dismiss milestone notices
+	timerPopupLayout = 1 // 1s: fullscreen, tray position and theme check
+	timerRefresh     = 2 // regular usage refresh
+	timerReset       = 4 // just after the next limit resets
+	timerActive      = 5 // deferred refresh for providers with session activity
+	timerPopup       = 8 // auto-dismiss milestone notices
 
 	cmdDetails    = 1
 	cmdRefresh    = 2
-	cmdOverlay    = 3
-	cmdMonitors   = 4
 	cmdAlerts     = 5
 	cmdStartup    = 6
 	cmdAbout      = 7
@@ -48,17 +42,10 @@ const (
 	cmdExit       = 9
 	cmdAlwaysShow = 10
 	cmdMilestones = 11
-	cmdPosition   = 100 // + index into positions
+	cmdPopupDelay = 400 // + seconds
 	cmdInterval   = 200 // + minutes
 	cmdProvider   = 300 // + index into providerModes
-	slotTTL       = 5 * time.Second
 	activeMinGap  = 60 * time.Second
-
-	// After a window opens or closes, the taskbar slides its buttons and may collapse the
-	// weather widget for a second or more. Re-read it until it holds still.
-	relayoutEvery     = 250 * time.Millisecond
-	relayoutMaxPasses = 20 // 5s
-	relayoutSteady    = 3  // unchanged reads in a row before the layout counts as settled
 
 	runKey         = `Software\Microsoft\Windows\CurrentVersion\Run`
 	runValue       = "BurnBar"
@@ -66,40 +53,10 @@ const (
 )
 
 var (
-	positions     = []struct{ key, label string }{{"auto", "Auto (find free space)"}, {"left", "Left side"}, {"right", "Next to tray icons"}}
+	popupDelays   = []int{3, 5, 6, 10, 15, 30, 60}
 	intervals     = []int{1, 3, 5, 10}
-	providerModes = []struct{ key, label string }{{"both", "Claude + Codex (rotate every 8 sec)"}, {"claude", "Claude only"}, {"codex", "Codex only"}}
+	providerModes = []struct{ key, label string }{{"both", "Claude + Codex"}, {"claude", "Claude only"}, {"codex", "Codex only"}}
 )
-
-type placement struct {
-	x, y, w, h int
-	scale      float64
-	light      bool
-	visible    bool
-}
-
-// overlay is one meter window, attached to one taskbar.
-type overlay struct {
-	hwnd  uintptr
-	tb    uintptr
-	last  placement
-	hover bool
-
-	slotBounds       RECT
-	slotReadAfter    time.Time
-	slotMargin       int
-	slotX            int
-	slotW            int
-	slotActualW      int
-	slotOK           bool
-	slotAt           time.Time
-	slotLayout       string // taskbar spans the slot was chosen from
-	flipAt           time.Time
-	flipFrom, flipTo *image.RGBA
-	flipScale        float64
-	flipWidth        int
-	flipLight        bool
-}
 
 type app struct {
 	demo    bool
@@ -115,15 +72,6 @@ type app struct {
 	readings map[usage.Provider]usage.Usage
 	fetches  map[usage.Provider]*fetchState
 
-	overlays       map[uintptr]*overlay // by taskbar window
-	slotsDirty     bool
-	layoutMoved    bool // a taskbar's spans changed since the previous read
-	relayoutPasses int
-	steadyPasses   int
-	activeProvider int
-	flipStarted    time.Time
-	flipPrevious   int
-
 	popupLifetime  alerts.PopupLifetime
 	popupNotice    string
 	popupProviders map[usage.Provider]bool
@@ -132,12 +80,10 @@ type app struct {
 	popupScale     float64
 	popupLight     bool
 	popupExpanded  bool
-	popupBounds    RECT
 	popupVisible   bool
 	popupActive    bool // became the foreground window at least once since shown
 	popupHiddenAt  time.Time
 	popupTB        uintptr
-	popupCenterX   int
 	popupMinute    int
 
 	trayIcon       uintptr
@@ -145,8 +91,6 @@ type app struct {
 	trayVersion4   bool
 	trayInput      trayInput
 	taskbarCreated uint32
-
-	uia *taskbarReader
 }
 
 type fetchState struct {
@@ -185,14 +129,13 @@ var theApp *app
 
 // Callbacks must stay referenced for the life of the process.
 var (
-	mainProcCB    = windowsCallback(mainProc)
-	overlayProcCB = windowsCallback(overlayProc)
-	popupProcCB   = windowsCallback(popupProc)
-	winEventCB    = windowsCallback7(winEventProc)
+	mainProcCB  = windowsCallback(mainProc)
+	popupProcCB = windowsCallback(popupProc)
+	winEventCB  = windowsCallback7(winEventProc)
 )
 
 func (a *app) run() error {
-	// Shell browser actions use the GUI apartment; UI Automation uses its own MTA.
+	// Shell browser actions use the GUI apartment.
 	if hr, _, _ := pCoInitializeEx.Call(0, coinitApartmentThreaded); hr == 0 || hr == 1 {
 		defer pCoUninitialize.Call()
 	}
@@ -200,12 +143,11 @@ func (a *app) run() error {
 	a.hinst, _, _ = pGetModuleHandleW.Call(0)
 	cursor, _, _ := pLoadCursorW.Call(0, IDC_ARROW)
 	icon, _, _ := pLoadImageW.Call(a.hinst, uintptr(unsafe.Pointer(utf16("APP"))), IMAGE_ICON, 0, 0, LR_DEFAULTSIZE)
-	a.overlays = map[uintptr]*overlay{}
 
 	for _, c := range []struct {
 		name string
 		proc uintptr
-	}{{"BurnBarMain", mainProcCB}, {"BurnBarOverlay", overlayProcCB}, {"BurnBarPopup", popupProcCB}} {
+	}{{"BurnBarMain", mainProcCB}, {"BurnBarPopup", popupProcCB}} {
 		wc := WNDCLASSEXW{LpfnWndProc: c.proc, HInstance: a.hinst, HCursor: cursor, HIcon: icon, LpszClassName: utf16(c.name)}
 		wc.CbSize = uint32(unsafe.Sizeof(wc))
 		if r, _, err := pRegisterClassExW.Call(uintptr(unsafe.Pointer(&wc))); r == 0 {
@@ -224,30 +166,23 @@ func (a *app) run() error {
 	}
 
 	startupErr := a.initializeStartup()
-	a.uia = newTaskbarReader(func() { pPostMessageW.Call(a.main, msgTaskbarLayout, 0, 0) },
-		func() taskbarSource { return newUIA() })
-	defer a.uia.close()
 	r, _, _ := pRegisterWindowMessageW.Call(uintptr(unsafe.Pointer(utf16("TaskbarCreated"))))
 	a.taskbarCreated = uint32(r)
 	pSetWinEventHook.Call(EVENT_SYS_FOREGND, EVENT_SYS_FOREGND, 0, winEventCB, 0, 0, WINEVENT_OUTOFCTX)
-	// Windows appearing or disappearing usually means taskbar buttons moved.
-	pSetWinEventHook.Call(EVENT_OBJECT_DESTROY, EVENT_OBJECT_HIDE, 0, winEventCB, 0, 0, WINEVENT_OUTOFCTX|WINEVENT_SKIPOWNPROCESS)
 	if !a.demo {
 		for _, p := range usage.Providers("both") {
 			watchActivity(p, func() { pPostMessageW.Call(a.main, msgActivity, providerID(p), 0) })
 		}
 	}
 
-	a.place(true)
 	a.updateTray()
 	a.syncPopup()
 	if startupErr != nil {
 		a.notify("Start with Windows could not be updated", startupErr.Error(), true)
 	}
 	a.refresh(true)
-	pSetTimer.Call(a.main, timerLayout, 1000, 0)
+	pSetTimer.Call(a.main, timerPopupLayout, 1000, 0)
 	a.setRefreshTimer()
-	a.resetRotation()
 
 	var m MSG
 	for {
@@ -344,7 +279,6 @@ func (a *app) onUsage(p usage.Provider) {
 		a.checkMilestones(u)
 	}
 	a.scheduleResetRefresh()
-	a.place(true)
 	a.updateTray()
 	if a.popupVisible {
 		a.renderPopup()
@@ -421,7 +355,7 @@ func (a *app) notify(title, body string, warn bool) {
 	pShellNotifyIconW.Call(NIM_MODIFY, uintptr(unsafe.Pointer(&nid)))
 }
 
-// Taskbar overlays
+// Popup rendering
 
 func systemUsesLightTheme() bool {
 	k, err := registry.OpenKey(registry.CURRENT_USER, `Software\Microsoft\Windows\CurrentVersion\Themes\Personalize`, registry.QUERY_VALUE)
@@ -431,141 +365,6 @@ func systemUsesLightTheme() bool {
 	defer k.Close()
 	v, _, err := k.GetIntegerValue("SystemUsesLightTheme")
 	return err == nil && v == 1
-}
-
-func (a *app) newOverlay(tb uintptr) *overlay {
-	// Keep the popup above its taskbar owner even when Search or Start raises
-	// the shell. An independent topmost window can remain visible but covered.
-	hwnd, _, _ := pCreateWindowExW.Call(WS_EX_LAYERED|WS_EX_TOOLWINDOW|WS_EX_TOPMOST|WS_EX_NOACTIVATE,
-		uintptr(unsafe.Pointer(utf16("BurnBarOverlay"))), uintptr(unsafe.Pointer(utf16("BurnBar"))),
-		WS_POPUP, 0, 0, 0, 0, tb, 0, a.hinst, 0)
-	return &overlay{hwnd: hwnd, tb: tb}
-}
-
-func (a *app) overlayByHwnd(hwnd uintptr) *overlay {
-	for _, ov := range a.overlays {
-		if ov.hwnd == hwnd {
-			return ov
-		}
-	}
-	return nil
-}
-
-// slot returns the overlay's x position, re-reading the taskbar layout every few seconds
-// or right after windows open and close.
-func (a *app) slot(ov *overlay, tb taskbar, w int, scale float64) (x, width int, fits, ready bool) {
-	margin := int(6 * scale)
-	if ov.slotBounds != tb.rect || ov.slotMargin != margin {
-		// A cached x and its UIA reading belong to the geometry/DPI measured.
-		if ov.slotBounds != (RECT{}) {
-			ov.slotReadAfter = time.Now()
-		}
-		ov.slotAt = time.Time{}
-		ov.slotOK = false
-		ov.slotBounds, ov.slotMargin = tb.rect, margin
-	}
-	if !a.slotsDirty && w == ov.slotW && time.Since(ov.slotAt) < slotTTL {
-		return ov.slotX, ov.slotActualW, ov.slotOK, true
-	}
-	maxAge := slotTTL
-	if a.slotsDirty {
-		maxAge = relayoutEvery
-	}
-	reading, available := a.uia.snapshot(tb.hwnd)
-	geometryStale := reading.at.Before(ov.slotReadAfter)
-	if geometryStale {
-		maxAge = 0 // remeasure immediately after a taskbar move or DPI change
-	}
-	a.uia.request(tb.hwnd, maxAge)
-	occupied, trayLeft, hasTray := layout.AnalyzeTaskbar(reading.items, tb.rect)
-	if !available || !reading.ok || geometryStale || time.Since(reading.at) > slotTTL+2*time.Second || (!hasTray && len(occupied) == 0) {
-		// Explorer can temporarily stop answering automation calls while Search
-		// or a flyout opens. Keep the last safe slot briefly and retry next tick.
-		a.layoutMoved = true
-		if ov.slotOK && ov.slotW == w && time.Since(ov.slotAt) < slotTTL+2*time.Second && ov.slotX >= int(tb.rect.Left)+margin && ov.slotX+ov.slotActualW <= int(tb.rect.Right)-margin {
-			return ov.slotX, ov.slotActualW, true, true
-		}
-		// Unknown geometry is not proof of a full taskbar. Keep the tray icon
-		// available rather than unexpectedly floating the meter over other apps.
-		return ov.slotX, w, false, false
-	}
-	if spans := fmt.Sprint(occupied, trayLeft); spans != ov.slotLayout {
-		ov.slotLayout = spans
-		a.layoutMoved = true
-	}
-	if !hasTray {
-		trayLeft = int(tb.rect.Right) - int(300*scale)
-		if !tb.primary {
-			trayLeft = int(tb.rect.Right) - int(140*scale) // clock only
-		}
-	}
-	x, width, fits = layout.PickSizedSlot(occupied, int(tb.rect.Left), trayLeft, w, render.MinimumWidgetWidth(scale), margin, a.cfg.Position)
-	if !fits {
-		width = w // no window is displayed; retain the preferred render width
-	}
-	ov.slotX, ov.slotW, ov.slotAt, ov.slotOK = x, w, reading.at, fits
-	ov.slotActualW = width
-	return x, width, fits, true
-}
-
-func (a *app) place(force bool) {
-	light := systemUsesLightTheme()
-	hideAll := !a.cfg.ShowOverlay || fullscreenAppActive()
-	seen := map[uintptr]bool{}
-	for _, tb := range findTaskbars(a.cfg.AllMonitors) {
-		seen[tb.hwnd] = true
-		ov := a.overlays[tb.hwnd]
-		if ov == nil {
-			ov = a.newOverlay(tb.hwnd)
-			a.overlays[tb.hwnd] = ov
-		}
-		p := placement{}
-		if v, _, _ := pIsWindowVisible.Call(tb.hwnd); v != 0 && !hideAll {
-			scale := float64(dpiForWindow(tb.hwnd)) / 96
-			w, h := render.GroupWidgetSize(scale, len(usage.Providers(a.cfg.Providers)))
-			x, actualW, fits, ready := a.slot(ov, tb, w, scale)
-			w = actualW
-			bounds, contained := layout.MeterRect(tb.rect, x, w, h)
-			p = placement{x: x, y: int(bounds.Top), w: w, h: h, scale: scale, light: light, visible: ready && fits && contained}
-		}
-		a.apply(ov, p, force)
-	}
-	a.slotsDirty = false
-	a.uia.forgetMissing(seen)
-	for tbh, ov := range a.overlays {
-		if !seen[tbh] {
-			pDestroyWindow.Call(ov.hwnd)
-			delete(a.overlays, tbh)
-		}
-	}
-}
-
-func (a *app) apply(ov *overlay, p placement, force bool) {
-	if !p.visible {
-		if ov.last.visible {
-			pShowWindow.Call(ov.hwnd, SW_HIDE)
-		}
-		ov.hover = false // hidden windows may never receive WM_MOUSELEAVE
-		ov.last = p
-		return
-	}
-	if force || p != ov.last {
-		img := a.widget(ov, p)
-		a.paint(ov.hwnd, img, p.x, p.y)
-	}
-	if !ov.last.visible {
-		pShowWindow.Call(ov.hwnd, SW_SHOWNOACTIVATE)
-	}
-	pSetWindowPos.Call(ov.hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE|SWP_SHOWWINDOW)
-	ov.last = p
-}
-
-func (a *app) raise() {
-	for _, ov := range a.overlays {
-		if ov.last.visible {
-			pSetWindowPos.Call(ov.hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE|SWP_NOSIZE|SWP_NOACTIVATE|SWP_SHOWWINDOW)
-		}
-	}
 }
 
 func (a *app) paint(hwnd uintptr, img *image.RGBA, x, y int) {
@@ -594,7 +393,11 @@ func (a *app) paint(hwnd uintptr, img *image.RGBA, x, y int) {
 // Details popup
 
 // togglePopup is called only from deferred UI work, never a shell callback.
-func (a *app) togglePopup(tb uintptr, centerX int) {
+func (a *app) togglePopup() {
+	tb := a.primaryTaskbar()
+	if tb == 0 {
+		return
+	}
 	if a.popupLifetime.Automatic() {
 		a.popupTB = tb
 		a.showPopup(true) // inspecting a notice promotes it to a manual view
@@ -602,6 +405,11 @@ func (a *app) togglePopup(tb uintptr, centerX int) {
 	}
 	if a.cfg.AlwaysShowPopup {
 		a.popupExpanded = !a.popupExpanded
+		if a.popupExpanded {
+			a.manualPopup()
+		} else {
+			a.clearPopup()
+		}
 		if a.popupVisible {
 			a.renderPopup()
 		} else {
@@ -616,7 +424,7 @@ func (a *app) togglePopup(tb uintptr, centerX int) {
 	if time.Since(a.popupHiddenAt) < 300*time.Millisecond {
 		return
 	}
-	a.popupTB, a.popupCenterX = tb, centerX
+	a.popupTB = tb
 	a.popupExpanded = false
 	a.showPopup(true)
 }
@@ -630,6 +438,7 @@ func (a *app) showPopup(activate bool) {
 		a.popupActive = false
 	}
 	a.popupVisible = true
+	a.updateTrayTooltip()
 	if activate {
 		pShowWindow.Call(a.popup, SW_SHOW)
 		pSetForegroundWindow.Call(a.popup)
@@ -639,10 +448,11 @@ func (a *app) showPopup(activate bool) {
 }
 
 func (a *app) hidePopup() {
-	a.manualPopup()
+	a.clearPopup()
 	a.popupVisible = false // ShowWindow may synchronously deliver WM_ACTIVATE
 	a.popupHiddenAt = time.Now()
 	pShowWindow.Call(a.popup, SW_HIDE)
+	a.updateTrayTooltip()
 }
 
 // syncPopup restores a persistent card without stealing focus after fullscreen,
@@ -672,21 +482,32 @@ func (a *app) syncPopup() {
 	}
 }
 
-func (a *app) manualPopup() {
-	a.popupLifetime.Manual()
+func (a *app) clearPopup() {
+	a.popupLifetime.Clear()
 	a.popupNotice = ""
 	a.popupProviders = nil
 	pKillTimer.Call(a.main, timerPopup)
 }
 
+func (a *app) popupDelay() time.Duration { return time.Duration(a.cfg.PopupSeconds) * time.Second }
+
+func (a *app) manualPopup() {
+	a.clearPopup()
+	a.popupLifetime.StartManual(time.Now(), a.popupDelay())
+	a.oneShot(timerPopup, a.popupLifetime.Remaining(time.Now()))
+}
+
 func (a *app) expirePopup() {
-	// Ignore an already-queued timer after the user promotes a notice.
-	if !a.popupLifetime.Automatic() {
+	if a.popupLifetime.Deadline.IsZero() {
 		return
 	}
 	now := time.Now()
 	if a.popupLifetime.Due(now) {
-		a.hidePopup()
+		if a.cfg.AlwaysShowPopup {
+			a.dismissPopup()
+		} else {
+			a.hidePopup()
+		}
 	} else {
 		a.oneShot(timerPopup, a.popupLifetime.Remaining(now))
 	}
@@ -719,7 +540,7 @@ func (a *app) checkMilestones(u usage.Usage) {
 	}
 	a.popupNotice = strings.Join(notices, " · ")
 	a.popupExpanded = false
-	a.popupLifetime.Start(time.Now())
+	a.popupLifetime.StartAutomatic(time.Now(), a.popupDelay())
 	a.showPopup(false)
 	a.oneShot(timerPopup, a.popupLifetime.Remaining(time.Now()))
 }
@@ -733,6 +554,7 @@ func (a *app) popupChanged() bool {
 // dismissPopup collapses details in always-visible mode, or closes a click-only card.
 func (a *app) dismissPopup() {
 	if a.cfg.AlwaysShowPopup {
+		a.clearPopup()
 		a.popupExpanded = false
 		a.renderPopup()
 	} else {
@@ -790,6 +612,8 @@ func (a *app) renderPopup() {
 		content = render.GroupPopup(scale, panels, th, int(work.Right-work.Left)-24, int(work.Bottom-work.Top)-24)
 	} else if a.popupLifetime.Automatic() {
 		content = render.TrayMilestoneCard(scale, readings, th, a.popupNotice)
+	} else if a.cfg.AlwaysShowPopup {
+		content = render.TrayPinnedCard(scale, readings, th)
 	} else {
 		content = render.TrayCard(scale, readings, th)
 	}
@@ -806,7 +630,6 @@ func (a *app) renderPopup() {
 	tipX = tipX * (content.Rect.Dx() + 2*max(2, int(4*scale))) / img.Rect.Dx()
 	img = render.FitPopup(render.TrayBubble(content, scale, th, tipX, tailTop), maxW, maxH)
 	a.paint(a.popup, img, int(bounds.Left), int(bounds.Top))
-	a.popupBounds = bounds
 	a.popupAnchor, a.popupWork = anchor, work
 	a.popupScale, a.popupLight = scale, systemUsesLightTheme()
 	a.popupMinute = time.Now().Minute()
@@ -845,9 +668,9 @@ func (a *app) updateTray() {
 	u := a.snapshot()
 	icon := makeIcon(render.GroupTrayIcon(size, u, systemUsesLightTheme()))
 
-	nid := NOTIFYICONDATAW{HWnd: a.main, UID: 1, UFlags: NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP, UCallbackMessage: msgTray, HIcon: icon}
+	nid := NOTIFYICONDATAW{HWnd: a.main, UID: 1, UFlags: NIF_MESSAGE | NIF_ICON, UCallbackMessage: msgTray, HIcon: icon}
 	nid.CbSize = uint32(unsafe.Sizeof(nid))
-	copyUTF16(nid.SzTip[:], render.GroupTooltip(u))
+	a.setTrayTooltip(&nid, u)
 	op := uintptr(NIM_MODIFY)
 	if !a.trayAdded {
 		op = NIM_ADD
@@ -867,6 +690,30 @@ func (a *app) updateTray() {
 		pDestroyIcon.Call(a.trayIcon)
 	}
 	a.trayIcon = icon
+}
+
+// Empty text also suppresses legacy-shell tooltips, not only version-4 SHOWTIP.
+func (a *app) setTrayTooltip(nid *NOTIFYICONDATAW, readings []usage.Usage) {
+	nid.UFlags |= NIF_TIP
+	nid.UFlags &^= NIF_SHOWTIP
+	for i := range nid.SzTip {
+		nid.SzTip[i] = 0
+	}
+	tip := render.PopupAwareTooltip(readings, a.popupVisible)
+	if tip != "" {
+		nid.UFlags |= NIF_SHOWTIP
+		copyUTF16(nid.SzTip[:], tip)
+	}
+}
+
+func (a *app) updateTrayTooltip() {
+	if !a.trayAdded {
+		return
+	}
+	nid := NOTIFYICONDATAW{HWnd: a.main, UID: 1}
+	nid.CbSize = uint32(unsafe.Sizeof(nid))
+	a.setTrayTooltip(&nid, a.snapshot())
+	pShellNotifyIconW.Call(NIM_MODIFY, uintptr(unsafe.Pointer(&nid)))
 }
 
 func (a *app) removeTray() {
@@ -896,10 +743,6 @@ func (a *app) showMenuAt(pt POINT) {
 		}
 		return 0
 	}
-	posMenu, _, _ := pCreatePopupMenu.Call()
-	for i, p := range positions {
-		add(posMenu, MF_STRING|check(a.cfg.Position == p.key), uintptr(cmdPosition+i), p.label)
-	}
 	intMenu, _, _ := pCreatePopupMenu.Call()
 	for _, m := range intervals {
 		add(intMenu, MF_STRING|check(a.cfg.IntervalMinutes == m), uintptr(cmdInterval+m), fmt.Sprintf("Every %d min", m))
@@ -921,11 +764,13 @@ func (a *app) showMenuAt(pt POINT) {
 	}
 	add(menu, MF_POPUP, providerMenu, "Usage providers")
 	add(menu, MF_SEPARATOR, 0, "")
-	add(menu, MF_STRING|check(a.cfg.MilestonePopups), cmdMilestones, "Milestone popups (10% steps, 6 sec)")
+	add(menu, MF_STRING|check(a.cfg.MilestonePopups), cmdMilestones, "Milestone popups (10% steps)")
 	add(menu, MF_STRING|check(a.cfg.AlwaysShowPopup), cmdAlwaysShow, "Always show popup (optional)")
-	add(menu, MF_STRING|check(a.cfg.ShowOverlay), cmdOverlay, "Show taskbar meter (optional)")
-	add(menu, MF_STRING|check(a.cfg.AllMonitors), cmdMonitors, "Show on all monitors")
-	add(menu, MF_POPUP, posMenu, "Position")
+	delayMenu, _, _ := pCreatePopupMenu.Call()
+	for _, seconds := range popupDelays {
+		add(delayMenu, MF_STRING|check(a.cfg.PopupSeconds == seconds), uintptr(cmdPopupDelay+seconds), fmt.Sprintf("%d seconds", seconds))
+	}
+	add(menu, MF_POPUP, delayMenu, "Close popup after")
 	add(menu, MF_POPUP, intMenu, "Refresh interval")
 	add(menu, MF_STRING|check(a.cfg.Alerts), cmdAlerts, "Windows alerts (80% / 95% / reset)")
 	add(menu, MF_STRING|check(startupEnabled()), cmdStartup, "Start with Windows")
@@ -951,8 +796,19 @@ func (a *app) showMenuAt(pt POINT) {
 		if !a.cfg.MilestonePopups && a.popupLifetime.Automatic() {
 			a.hidePopup()
 		}
+	case cmd >= cmdPopupDelay+1 && cmd <= cmdPopupDelay+300:
+		a.cfg.PopupSeconds = int(cmd - cmdPopupDelay)
+		if a.popupVisible && (!a.cfg.AlwaysShowPopup || a.popupExpanded) {
+			if a.popupLifetime.Automatic() {
+				a.popupLifetime.Clear()
+				a.popupLifetime.StartAutomatic(time.Now(), a.popupDelay())
+				a.oneShot(timerPopup, a.popupDelay())
+			} else {
+				a.manualPopup()
+			}
+		}
 	case cmd == cmdAlwaysShow:
-		a.manualPopup()
+		a.clearPopup()
 		a.cfg.AlwaysShowPopup = !a.cfg.AlwaysShowPopup
 		a.popupExpanded = false
 		if !a.cfg.AlwaysShowPopup {
@@ -960,10 +816,6 @@ func (a *app) showMenuAt(pt POINT) {
 		}
 	case cmd == cmdRefresh:
 		a.refresh(true)
-	case cmd == cmdOverlay:
-		a.cfg.ShowOverlay = !a.cfg.ShowOverlay
-	case cmd == cmdMonitors:
-		a.cfg.AllMonitors = !a.cfg.AllMonitors
 	case cmd == cmdAlerts:
 		a.cfg.Alerts = !a.cfg.Alerts
 	case cmd == cmdStartup:
@@ -981,11 +833,8 @@ func (a *app) showMenuAt(pt POINT) {
 		return
 	case cmd >= cmdProvider && cmd < cmdProvider+uintptr(len(providerModes)):
 		a.cfg.Providers = providerModes[cmd-cmdProvider].key
-		a.resetRotation()
 		a.refresh(false)
 		a.scheduleResetRefresh()
-	case cmd >= cmdPosition && cmd < cmdPosition+uintptr(len(positions)):
-		a.cfg.Position = positions[cmd-cmdPosition].key
 	case cmd > cmdInterval && cmd <= cmdInterval+60:
 		a.cfg.IntervalMinutes = int(cmd - cmdInterval)
 		a.setRefreshTimer()
@@ -996,8 +845,6 @@ func (a *app) showMenuAt(pt POINT) {
 		return
 	}
 	a.cfg.Save()
-	a.slotsDirty = true
-	a.place(true)
 	a.updateTray()
 	if a.popupVisible {
 		a.renderPopup()
@@ -1014,31 +861,10 @@ func mainProc(hwnd, msg, wparam, lparam uintptr) uintptr {
 		switch wparam {
 		case timerPopup:
 			a.expirePopup()
-		case timerLayout:
-			a.place(false)
+		case timerPopupLayout:
 			a.syncPopup()
 		case timerRefresh:
 			a.refresh(false)
-		case timerRotate:
-			a.rotateProvider()
-		case timerFlip:
-			a.animateFlip()
-		case timerRelayout:
-			// Follow the taskbar's animation: a slot read mid-slide can end up under Start.
-			a.slotsDirty = true
-			a.layoutMoved = false
-			a.place(false)
-			if a.layoutMoved {
-				a.steadyPasses = 0
-			} else {
-				a.steadyPasses++
-			}
-			if a.relayoutPasses--; a.relayoutPasses > 0 && a.steadyPasses < relayoutSteady {
-				a.oneShot(timerRelayout, relayoutEvery)
-			} else {
-				a.relayoutPasses = 0
-				pKillTimer.Call(a.main, timerRelayout)
-			}
 		case timerReset:
 			pKillTimer.Call(a.main, timerReset)
 			a.refresh(false)
@@ -1052,20 +878,8 @@ func mainProc(hwnd, msg, wparam, lparam uintptr) uintptr {
 	case msg == msgActivity:
 		a.onActivity(providerFromID(wparam))
 		return 0
-	case msg == msgTaskbarLayout:
-		a.slotsDirty = true
-		a.place(false)
-		return 0
 	case msg == msgShellEvent:
-		if wparam == EVENT_SYS_FOREGND {
-			a.raise()
-		} else {
-			a.steadyPasses = 0
-			if a.relayoutPasses == 0 {
-				a.relayoutPasses = relayoutMaxPasses
-				a.oneShot(timerRelayout, relayoutEvery)
-			}
-		}
+		a.syncPopup()
 		return 0
 	case msg == msgTray:
 		a.handleTray(wparam, lparam)
@@ -1076,7 +890,7 @@ func mainProc(hwnd, msg, wparam, lparam uintptr) uintptr {
 		case trayMenu:
 			a.showMenuAt(pt)
 		case trayDetails:
-			a.togglePopup(a.primaryTaskbar(), int(pt.X))
+			a.togglePopup()
 		}
 		return 0
 	case msg == msgMenu:
@@ -1085,44 +899,12 @@ func mainProc(hwnd, msg, wparam, lparam uintptr) uintptr {
 	case a != nil && a.taskbarCreated != 0 && uint32(msg) == a.taskbarCreated:
 		// Explorer restarted: the tray icon is gone and the taskbars are new windows.
 		a.trayAdded = false
+		a.popupTB = a.primaryTaskbar()
 		a.updateTray()
-		a.slotsDirty = true
-		a.place(true)
+		a.syncPopup()
 		return 0
 	case msg == WM_DESTROY:
 		pPostQuitMessage.Call(0)
-		return 0
-	}
-	r, _, _ := pDefWindowProcW.Call(hwnd, msg, wparam, lparam)
-	return r
-}
-
-func overlayProc(hwnd, msg, wparam, lparam uintptr) uintptr {
-	a := theApp
-	ov := a.overlayByHwnd(hwnd)
-	if ov == nil {
-		r, _, _ := pDefWindowProcW.Call(hwnd, msg, wparam, lparam)
-		return r
-	}
-	switch msg {
-	case WM_MOUSEMOVE:
-		if !ov.hover {
-			ov.hover = true
-			tme := TRACKMOUSEEVENT{DwFlags: TME_LEAVE, HwndTrack: hwnd}
-			tme.CbSize = uint32(unsafe.Sizeof(tme))
-			pTrackMouseEvent.Call(uintptr(unsafe.Pointer(&tme)))
-			a.place(true)
-		}
-		return 0
-	case WM_MOUSELEAVE:
-		ov.hover = false
-		a.place(true)
-		return 0
-	case WM_LBUTTONUP:
-		a.togglePopup(ov.tb, ov.last.x+ov.last.w/2)
-		return 0
-	case WM_RBUTTONUP:
-		pPostMessageW.Call(a.main, msgMenu, 0, 0)
 		return 0
 	}
 	r, _, _ := pDefWindowProcW.Call(hwnd, msg, wparam, lparam)
@@ -1137,7 +919,7 @@ func popupProc(hwnd, msg, wparam, lparam uintptr) uintptr {
 		return 0
 	case WM_ACTIVATE:
 		// Close when the user clicks elsewhere. If Windows refused to give the popup focus,
-		// it stays open until the widget or tray icon is clicked again.
+		// the configured timeout still closes it.
 		if wparam&0xFFFF != WA_INACTIVE {
 			a.popupActive = true
 		} else if a.popupVisible && a.popupActive {
@@ -1173,7 +955,7 @@ func winEventProc(hook, event, hwnd, idObject, idChild, thread, ts uintptr) uint
 	if a == nil {
 		return 0
 	}
-	if event == EVENT_SYS_FOREGND || (int32(idObject) == OBJID_WINDOW && idChild == 0) {
+	if event == EVENT_SYS_FOREGND {
 		pPostMessageW.Call(a.main, msgShellEvent, event, 0)
 	}
 	return 0

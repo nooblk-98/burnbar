@@ -50,8 +50,9 @@ Test sources are kept locally and ignored by Git. Run any local tests you mainta
 before submitting a change, and include the results in your pull request.
 
 For UI changes, check both light and dark themes, display scaling, and the
-affected taskbar configuration. Placement changes should also be checked while
-Search and Start open, taskbar buttons move, and a fullscreen app is active.
+notification-area placement. Check automatic and manual popup expiry at different
+close delays, tooltip suppression/restoration, Search/Start, fullscreen apps and
+notification icons moved into or out of the overflow area.
 Use local regression checks for behavior changes where they can catch the original bug.
 Documentation-only changes need a review of links, examples, and formatting.
 
@@ -68,7 +69,7 @@ of missing login, unavailable quotas, timeouts, and rate limits.
 Provider fetching and parsing live in `internal/usage`. Keep parsing separate
 from network or process access so it can be tested using synthetic fixtures.
 The shared `usage.Usage` and `usage.Window` types feed rendering and history.
-Check provider selection, menus, refresh/backoff state, rotation, and separate
+Check provider selection, menus, refresh/backoff state, milestone windows, and separate
 history storage when adding another provider; registration is currently explicit
 across those areas. Use reported quota durations and reset times when available.
 
