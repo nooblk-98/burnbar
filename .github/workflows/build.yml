@@ -108,6 +108,30 @@ jobs:
             --repo "$env:GITHUB_REPOSITORY" --verify-tag --title "BurnBar $env:GITHUB_REF_NAME" `
             --generate-notes --notes-file notes.md @extra
 
+      - name: Verify newly published stable installation
+        if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $visible = $false
+          for ($attempt = 0; $attempt -lt 12; $attempt++) {
+            $latest = gh api "repos/$env:GITHUB_REPOSITORY/releases/latest" --jq .tag_name
+            if ($LASTEXITCODE -eq 0 -and $latest -eq $env:GITHUB_REF_NAME) { $visible = $true; break }
+            Start-Sleep -Seconds 5
+          }
+          if (-not $visible) { throw "The stable release is not visible as latest yet" }
+          $env:APPDATA = Join-Path $env:RUNNER_TEMP 'BurnBar stable release smoke profile'
+          $installDir = Join-Path $env:RUNNER_TEMP 'BurnBar stable release smoke install'
+          node npm/bin/burnbar.cjs install --channel stable --no-start --install-dir $installDir
+          if ($LASTEXITCODE -ne 0) { throw "New stable installation failed" }
+          $expected = (Get-FileHash bin/burnbar.exe -Algorithm SHA256).Hash
+          $installed = Join-Path $installDir 'burnbar.exe'
+          if ((Get-FileHash $installed -Algorithm SHA256).Hash -ne $expected) { throw "Installed stable binary does not match this release" }
+          $stamp = (Get-Item $installed).LastWriteTimeUtc
+          node npm/bin/burnbar.cjs update --channel stable --no-start --install-dir $installDir
+          if ($LASTEXITCODE -ne 0 -or (Get-Item $installed).LastWriteTimeUtc -ne $stamp) { throw "Stable repeat update failed or rewrote a current binary" }
+
       - name: Publish immutable development release
         if: github.event_name == 'push' && github.ref == 'refs/heads/development'
         shell: pwsh

@@ -8,15 +8,15 @@ a signing service, certificate, or manual approval.
 Tag the commit you want to release and push it to GitHub:
 
 ```powershell
-git tag -a v0.2.2 -m "BurnBar v0.2.2"
-git push origin main v0.2.2
+git tag -a v0.3.0 -m "BurnBar v0.3.0"
+git push origin main v0.3.0
 ```
 
 The `build` workflow runs vet, generates the icon, manifest and version
 information, then builds `burnbar.exe`. It uploads `burnbar.exe`,
 `burnbar.exe.sha256` directly to a GitHub release,
-without using Actions artifact storage. A version such as `v0.2.2` creates a normal release; a version with a
-suffix such as `v0.2.2-beta.1` creates a prerelease.
+without using Actions artifact storage. A version such as `v0.3.0` creates a normal release; a version with a
+suffix such as `v0.3.0-beta.1` creates a prerelease.
 
 Windows may warn about or block an unsigned executable. Release assets include
 a SHA-256 checksum so downloads can be checked with `Get-FileHash`.
@@ -81,11 +81,12 @@ avoid a long-lived publish token:
 If publishing is intentionally disabled, set `NPM_PUBLISH_ENABLED=false`.
 GitHub builds and GitHub-backed npx installation work independently.
 
-To establish the stable npm channel, merge the workflow into `main`, then create
-the next stable version tag. Until that first stable npm publication, use
-`npx --yes burnbar@development install --channel stable` or the GitHub-backed
-stable command. Stable tags on commits outside main are rejected before publishing
-a stable binary or package.
+Stable releases are published from version tags after merging into `main`.
+`npx --yes burnbar@latest install` installs/updates stable; the development channel
+remains separate. Stable tags on commits outside main are rejected before publishing
+a stable binary or package. Verify both public dist-tags and npx execution after
+npm finishes registry processing; a successful publish job alone is not proof
+that the installer is available yet.
 
 ### Installer verification
 
@@ -93,7 +94,8 @@ The Windows workflow packs the exact npm payload and invokes it through npx to
 install and update the current stable executable in a temporary directory without
 launching it. It verifies an up-to-date executable is not rewritten and settings
 and history fixtures are unchanged. Development pushes additionally install the
-published development binary without launching it. These checks do not validate
+published development binary without launching it. Stable version tags additionally
+install the newly published stable binary and verify it matches the build checksum. These checks do not validate
 live desktop behavior. Local test sources remain excluded from Git.
 
 npx is the supported installation entry point. The old root `install.ps1` and

@@ -99,24 +99,19 @@ Requires [Node.js 22+](https://nodejs.org/) (includes npm/npx) and Windows Power
 access or npm login is required.
 
 ```powershell
-# Install or update to the latest development build
+# Install or update the latest stable release
+npx --yes burnbar@latest install
+
+# Install or update the latest development build (may contain bugs)
 npx --yes burnbar@development install
 
-# Install or update to the latest stable executable
-npx --yes burnbar@development install --channel stable
+# Explicitly switch an existing development installation back to stable
+npx --yes burnbar@latest update --channel stable
 ```
 
-`burnbar@development` is published and verified. Use the explicit stable-channel
-command above until the first stable npm package is released from main. npm's
-initial `latest` alias currently also points to a development installer; do not
-use that alias to select stable software yet.
-
-After the first stable version tag publishes the stable npm channel, this will
-become the stable shortcut:
-
-```powershell
-npx --yes burnbar@latest install
-```
+The `latest` npm channel selects stable binaries; `development` selects development
+prereleases. Stable npm packages and GitHub binaries are published together from
+version tags on main. Development packages are published from development pushes.
 
 `install` and `update` perform the same verified process. Running the command
 again updates the executable; there is no background auto-updater. Switching
@@ -124,7 +119,7 @@ channels preserves settings, history and startup preferences.
 
 ```powershell
 # Optional: another folder, without launching
-npx --yes burnbar@development update --channel stable --install-dir 'D:\Apps\BurnBar' --no-start
+npx --yes burnbar@latest update --install-dir 'D:\Apps\BurnBar' --no-start
 
 # Check release metadata without installing
 npx --yes burnbar@development install --dry-run
