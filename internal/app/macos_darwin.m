@@ -42,18 +42,18 @@ static NSDictionary *readState(void) {
  NSArray *titles=@[@"Authorize Claude Keychain…",@"Refresh",@"Preferences…",@"Snooze for one hour",@"Resume notices",@"Check for updates",@"Release notes",@"Quit BurnBar"];
  SEL actions[]={@selector(authorize:),@selector(refresh:),@selector(preferences:),@selector(snooze:),@selector(resume:),@selector(updates:),@selector(releases:),@selector(quit:)};
  for(NSUInteger i=0;i<titles.count;i++){NSMenuItem *item=[[NSMenuItem alloc]initWithTitle:titles[i] action:actions[i] keyEquivalent:i==7?@"q":@""];item.target=self;[self.menu addItem:item];}
- self.popover=[[NSPopover alloc]init];self.popover.behavior=NSPopoverBehaviorTransient;self.popover.delegate=self;
+ self.popover=[[NSPopover alloc]init];self.popover.behavior=NSPopoverBehaviorTransient;self.popover.animates=NO;self.popover.delegate=self;
  NSViewController *vc=[[NSViewController alloc]init];vc.view=[[NSView alloc]initWithFrame:NSMakeRect(0,0,370,560)];
  NSStackView *stack=[NSStackView stackViewWithViews:@[]];stack.orientation=NSUserInterfaceLayoutOrientationVertical;stack.alignment=NSLayoutAttributeLeading;stack.spacing=10;stack.translatesAutoresizingMaskIntoConstraints=NO;[vc.view addSubview:stack];
  [NSLayoutConstraint activateConstraints:@[[stack.leadingAnchor constraintEqualToAnchor:vc.view.leadingAnchor constant:14],[stack.trailingAnchor constraintEqualToAnchor:vc.view.trailingAnchor constant:-14],[stack.topAnchor constraintEqualToAnchor:vc.view.topAnchor constant:14],[stack.bottomAnchor constraintEqualToAnchor:vc.view.bottomAnchor constant:-14]]];
  [stack addArrangedSubview:label(@"BurnBar · macOS preview")];
  self.meters=[NSStackView stackViewWithViews:@[]];self.meters.orientation=NSUserInterfaceLayoutOrientationVertical;self.meters.alignment=NSLayoutAttributeLeading;self.meters.spacing=4;[stack addArrangedSubview:self.meters];
  NSScrollView *scroll=[[NSScrollView alloc]init];scroll.hasVerticalScroller=YES;scroll.borderType=NSNoBorder;[scroll.heightAnchor constraintEqualToConstant:285].active=YES;[scroll.widthAnchor constraintEqualToConstant:342].active=YES;
- self.summary=[[NSTextView alloc]initWithFrame:NSMakeRect(0,0,342,285)];self.summary.editable=NO;self.summary.selectable=YES;self.summary.font=[NSFont systemFontOfSize:12];self.summary.autoresizingMask=NSViewWidthSizable;self.summary.horizontallyResizable=NO;self.summary.verticallyResizable=YES;self.summary.minSize=NSMakeSize(0,0);self.summary.maxSize=NSMakeSize(CGFLOAT_MAX,CGFLOAT_MAX);self.summary.textContainer.containerSize=NSMakeSize(342,CGFLOAT_MAX);self.summary.textContainer.widthTracksTextView=YES;scroll.documentView=self.summary;[stack addArrangedSubview:scroll];
+ self.summary=[[NSTextView alloc]initWithFrame:NSMakeRect(0,0,342,285)];self.summary.editable=NO;self.summary.selectable=YES;self.summary.font=[NSFont systemFontOfSize:12];self.summary.autoresizingMask=NSViewWidthSizable;self.summary.horizontallyResizable=NO;self.summary.verticallyResizable=YES;self.summary.minSize=NSMakeSize(0,0);self.summary.maxSize=NSMakeSize(CGFLOAT_MAX,CGFLOAT_MAX);self.summary.textContainer.containerSize=NSMakeSize(342,CGFLOAT_MAX);self.summary.textContainer.widthTracksTextView=YES;self.summary.textContainer.lineBreakMode=NSLineBreakByWordWrapping;scroll.documentView=self.summary;[stack addArrangedSubview:scroll];
  NSStackView *buttons=[NSStackView stackViewWithViews:@[button(@"Refresh",self,@selector(refresh:)),button(@"Preferences…",self,@selector(preferences:)),button(@"Close",self,@selector(close:))]];[stack addArrangedSubview:buttons];
  self.popover.contentViewController=vc;
  if(self.smoke){fprintf(stderr,"Native views created; first tick\n");fflush(stderr);}
- [self tick:nil];[NSTimer scheduledTimerWithTimeInterval:1 target:self selector:@selector(tick:) userInfo:nil repeats:YES];
+ [self tick:nil];NSTimer *timer=[NSTimer timerWithTimeInterval:1 target:self selector:@selector(tick:) userInfo:nil repeats:YES];[[NSRunLoop mainRunLoop]addTimer:timer forMode:NSRunLoopCommonModes];
  if(self.smoke)[self performSelector:@selector(smokeStart) withObject:nil afterDelay:0.5];
 }
 - (void)tick:(id)sender {
@@ -64,7 +64,7 @@ static NSDictionary *readState(void) {
  // Only rebuild noninteractive meter views, keeping text selection and controls stable.
  if(self.popover.shown||self.smoke){for(NSView *v in self.meters.arrangedSubviews){[self.meters removeArrangedSubview:v];[v removeFromSuperview];}
   if(!self.automaticNotice)for(NSDictionary *m in self.state[@"meters"]){[self.meters addArrangedSubview:label([NSString stringWithFormat:@"%@: %.0f%%",m[@"label"],[m[@"percent"] doubleValue]])];NSProgressIndicator *bar=[[NSProgressIndicator alloc]initWithFrame:NSMakeRect(0,0,330,8)];bar.indeterminate=NO;bar.minValue=0;bar.maxValue=100;bar.doubleValue=[m[@"percent"]doubleValue];[bar.widthAnchor constraintEqualToConstant:330].active=YES;[bar.heightAnchor constraintEqualToConstant:8].active=YES;[self.meters addArrangedSubview:bar];}}
- if(self.deadline&&[self.deadline timeIntervalSinceNow]<=0)[self close:nil];
+ if(self.deadline&&[self.deadline timeIntervalSinceNow]<=0){if(self.smoke){fprintf(stderr,"Expiring native popover\n");fflush(stderr);}[self close:nil];}
  NSString *notice=self.state[@"notice"];if(notice.length&&!self.popover.shown&&!self.settings.visible){self.automaticNotice=notice;[self show:NO];}
 }
 - (void)show:(BOOL)manual {
@@ -77,7 +77,7 @@ static NSDictionary *readState(void) {
 }
 - (void)clicked:(id)sender {if(NSApp.currentEvent.type==NSEventTypeRightMouseUp){[NSMenu popUpContextMenu:self.menu withEvent:NSApp.currentEvent forView:self.status.button];}else if(self.popover.shown){[self close:nil];}else{[self show:YES];}}
 - (void)popoverDidClose:(NSNotification *)notification {self.deadline=nil;self.automaticNotice=nil;}
-- (void)close:(id)sender {[self.popover performClose:nil];self.deadline=nil;self.automaticNotice=nil;}
+- (void)close:(id)sender {[self.popover close];self.deadline=nil;self.automaticNotice=nil;}
 - (void)authorize:(id)sender {bb_action(5);[self show:YES];}
 - (void)refresh:(id)sender {bb_action(1);if(self.popover.shown)self.deadline=[NSDate dateWithTimeIntervalSinceNow:[self.state[@"seconds"]doubleValue]];[self tick:nil];}
 - (void)snooze:(id)sender {bb_action(2);[self close:nil];}

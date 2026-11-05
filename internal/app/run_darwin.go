@@ -235,7 +235,7 @@ func bb_state() *C.char {
 				continue
 			}
 			meters = append(meters, map[string]any{"label": p.Name() + " " + usage.WindowShortLabel(w, "quota"), "percent": w.Percent})
-			lines = append(lines, fmt.Sprintf("%s: %.0f%% used. %s", w.Label, w.Percent, render.ResetText(w.ResetsAt)))
+			lines = append(lines, fmt.Sprintf("%s: %.0f%% used.\n%s", w.Label, w.Percent, render.ResetText(w.ResetsAt)))
 			if m.cfg.ShowForecast {
 				if f, ok := insights.Estimate(u, m.hist[p].Since(time.Now().Add(-3*time.Hour)), i == 1, time.Now()); ok {
 					lines = append(lines, f.Text())
