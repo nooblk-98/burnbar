@@ -90,12 +90,13 @@ jobs:
         run: go build -trimpath -ldflags "-H windowsgui -s -w -X main.version=${{ steps.version.outputs.version }}" -o bin/burnbar.exe ./cmd/burnbar
 
       - name: Smoke-check native settings and readable usage
+        timeout-minutes: 2
         shell: pwsh
         run: |
           $env:APPDATA = Join-Path $env:RUNNER_TEMP 'BurnBar UI smoke profile'
-          $profile = Join-Path $env:APPDATA 'BurnBar'
-          New-Item -ItemType Directory -Force $profile | Out-Null
-          '{"popupBehaviorVersion":1,"startWithWindows":false,"popupSeconds":2,"checkUpdates":false}' | Set-Content (Join-Path $profile 'config.json')
+          $uiProfileDir = Join-Path $env:APPDATA 'BurnBar'
+          New-Item -ItemType Directory -Force $uiProfileDir | Out-Null
+          '{"popupBehaviorVersion":1,"startWithWindows":false,"popupSeconds":2,"checkUpdates":false}' | Set-Content (Join-Path $uiProfileDir 'config.json')
           Add-Type @'
           using System;
           using System.Text;
@@ -146,14 +147,14 @@ jobs:
             if ($primary -ne '50, 80, 95' -or $secondary -ne '50, 80, 95') { throw "Threshold preset mismatch: primary=$primary secondary=$secondary" }
             [void][BurnBarUI]::PostMessage($settings, 0x111, [IntPtr]2, [IntPtr]::Zero)
             Start-Sleep -Milliseconds 200
-            $config = Get-Content (Join-Path $profile 'config.json') -Raw | ConvertFrom-Json
+            $config = Get-Content (Join-Path $uiProfileDir 'config.json') -Raw | ConvertFrom-Json
             if ($null -ne $config.primaryThresholds) { throw 'Cancel saved draft thresholds' }
             [void][BurnBarUI]::PostMessage($main, 0x111, [IntPtr]12, [IntPtr]::Zero)
             $settings = Wait-Window 'BurnBar settings'
             [void][BurnBarUI]::PostMessage($settings, 0x111, [IntPtr]1011, [IntPtr]::Zero)
             [void][BurnBarUI]::PostMessage($settings, 0x111, [IntPtr]1, [IntPtr]::Zero)
             Start-Sleep -Milliseconds 400
-            $config = Get-Content (Join-Path $profile 'config.json') -Raw | ConvertFrom-Json
+            $config = Get-Content (Join-Path $uiProfileDir 'config.json') -Raw | ConvertFrom-Json
             if (($config.primaryThresholds -join ',') -ne '25,50,75,100' -or ($config.secondaryThresholds -join ',') -ne '25,50,75,100') { throw 'Saved thresholds did not persist' }
             [void][BurnBarUI]::PostMessage($main, 0x111, [IntPtr]13, [IntPtr]::Zero)
             $readable = Wait-Window 'BurnBar readable usage'

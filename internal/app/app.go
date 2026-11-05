@@ -311,9 +311,9 @@ func (a *app) onUsage(p usage.Provider) {
 		state.cooldownUntil = time.Time{}
 		if !a.demo {
 			a.hist[p].Add(u)
+			a.checkAlerts(u)
+			a.checkMilestones(u)
 		}
-		a.checkAlerts(u)
-		a.checkMilestones(u)
 	}
 	a.scheduleResetRefresh()
 	a.updateAccessible()

@@ -230,8 +230,10 @@ func (a *app) saveSettings() {
 	c.StartWithWindows = &on
 	if !slices.Equal(c.PrimaryThresholds, a.cfg.PrimaryThresholds) || !slices.Equal(c.SecondaryThresholds, a.cfg.SecondaryThresholds) {
 		c.MilestoneState = alerts.Tracker{}
-		for _, u := range a.snapshot() {
-			c.MilestoneState.ObserveThresholds(u, c.PrimaryThresholds, c.SecondaryThresholds)
+		if !a.demo {
+			for _, u := range a.snapshot() {
+				c.MilestoneState.ObserveThresholds(u, c.PrimaryThresholds, c.SecondaryThresholds)
+			}
 		}
 	}
 	acquiredHotkey := c.Hotkey && !a.hotkeyRegistered
