@@ -1,5 +1,6 @@
 #!/bin/bash
 set -euo pipefail
+export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-15.0}"
 version="${1:-0.0.0-dev}"
 architecture="$(go env GOARCH)"
 case "$architecture" in arm64|amd64) ;; *) echo 'Unsupported macOS architecture' >&2; exit 1;; esac
