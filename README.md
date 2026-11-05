@@ -15,7 +15,7 @@ See how fast you're burning through your plan limits without leaving what you're
 
 [Features](#features) • [See it in action](#see-it-in-action) • [Installation](#installation) • [Build from source](#build-from-source)
 
-<img src="docs/images/milestone-popup-dark.png" alt="BurnBar brief usage milestone notification" width="410">
+<img src="docs/images/burnbar-banner-rounded.png" alt="BurnBar Claude and Codex usage popup on the Windows desktop" width="848">
 
 </div>
 
