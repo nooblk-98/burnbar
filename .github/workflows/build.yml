@@ -83,8 +83,27 @@ jobs:
         run: |
           export APPDATA="$RUNNER_TEMP/BurnBar-macOS-smoke"
           export BURNBAR_MACOS_SMOKE=1
-          dist/BurnBar.app/Contents/MacOS/burnbar -demo -providers both
+          mkdir -p .build
+          dist/BurnBar.app/Contents/MacOS/burnbar -demo -providers both > .build/macos-ui.log 2>&1 &
+          ui_pid=$!
+          for attempt in $(seq 1 35); do
+            if ! kill -0 "$ui_pid" 2>/dev/null; then break; fi
+            sleep 1
+          done
+          if kill -0 "$ui_pid" 2>/dev/null; then
+            cat .build/macos-ui.log
+            /usr/bin/sample "$ui_pid" 2 1 -file .build/macos-ui-sample.txt || true
+            head -150 .build/macos-ui-sample.txt || true
+            kill "$ui_pid" || true
+            exit 1
+          fi
+          if wait "$ui_pid"; then cat .build/macos-ui.log; else cat .build/macos-ui.log; exit 1; fi
           node -e 'const fs=require("fs"),path=require("path");const c=JSON.parse(fs.readFileSync(path.join(process.env.APPDATA,"BurnBar","config.json")));if(c.primaryThresholds.join(",")!=="25,50,75,100"||c.popupSeconds!==2)throw Error("Saved preferences missing")'
+      - uses: actions/upload-artifact@v7
+        with:
+          name: preview-macos-${{ matrix.arch }}
+          path: ${{ runner.temp }}/BurnBar-macOS-smoke/*.png
+          if-no-files-found: error
       - uses: actions/upload-artifact@v7
         with:
           name: macos-${{ matrix.arch }}

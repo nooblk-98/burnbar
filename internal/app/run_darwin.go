@@ -58,6 +58,9 @@ var mac *macApp
 func Run(demo bool, mode, version string) error {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
+	if os.Getenv("BURNBAR_MACOS_SMOKE") == "1" {
+		fmt.Fprintln(os.Stderr, "Initializing macOS engine")
+	}
 	lock, e := os.OpenFile(filepath.Join(config.Dir(), "instance.lock"), os.O_CREATE|os.O_RDWR, 0600)
 	if e != nil {
 		return e
@@ -90,6 +93,9 @@ func Run(demo bool, mode, version string) error {
 			return fmt.Errorf("UI smoke mode requires -demo")
 		}
 		smoke = 1
+	}
+	if smoke == 1 {
+		fmt.Fprintln(os.Stderr, "Entering AppKit event loop")
 	}
 	if C.bb_run(C.int(smoke)) != 0 {
 		return fmt.Errorf("macOS UI smoke check failed")

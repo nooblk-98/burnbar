@@ -32,6 +32,7 @@ static NSDictionary *readState(void) {
 @implementation BurnBarDelegate
 - (void)applicationDidFinishLaunching:(NSNotification *)notification {
  if(self.smoke){fprintf(stderr,"AppKit finished launching\n");fflush(stderr);}
+ if(self.smoke){fprintf(stderr,"Creating status item\n");fflush(stderr);}
  self.status=[[NSStatusBar systemStatusBar] statusItemWithLength:NSVariableStatusItemLength];
  self.status.button.title=@"BurnBar";self.status.button.toolTip=@"Claude and Codex usage";
  self.status.button.target=self;self.status.button.action=@selector(clicked:);
@@ -41,7 +42,7 @@ static NSDictionary *readState(void) {
  SEL actions[]={@selector(authorize:),@selector(refresh:),@selector(preferences:),@selector(snooze:),@selector(resume:),@selector(updates:),@selector(releases:),@selector(quit:)};
  for(NSUInteger i=0;i<titles.count;i++){NSMenuItem *item=[[NSMenuItem alloc]initWithTitle:titles[i] action:actions[i] keyEquivalent:i==7?@"q":@""];item.target=self;[self.menu addItem:item];}
  self.popover=[[NSPopover alloc]init];self.popover.behavior=NSPopoverBehaviorTransient;self.popover.delegate=self;
- NSViewController *vc=[[NSViewController alloc]init];vc.view=[[NSView alloc]initWithFrame:NSMakeRect(0,0,370,500)];
+ NSViewController *vc=[[NSViewController alloc]init];vc.view=[[NSView alloc]initWithFrame:NSMakeRect(0,0,370,560)];
  NSStackView *stack=[NSStackView stackViewWithViews:@[]];stack.orientation=NSUserInterfaceLayoutOrientationVertical;stack.alignment=NSLayoutAttributeLeading;stack.spacing=10;stack.translatesAutoresizingMaskIntoConstraints=NO;[vc.view addSubview:stack];
  [NSLayoutConstraint activateConstraints:@[[stack.leadingAnchor constraintEqualToAnchor:vc.view.leadingAnchor constant:14],[stack.trailingAnchor constraintEqualToAnchor:vc.view.trailingAnchor constant:-14],[stack.topAnchor constraintEqualToAnchor:vc.view.topAnchor constant:14],[stack.bottomAnchor constraintEqualToAnchor:vc.view.bottomAnchor constant:-14]]];
  [stack addArrangedSubview:label(@"BurnBar · macOS preview")];
@@ -50,6 +51,7 @@ static NSDictionary *readState(void) {
  self.summary=[[NSTextView alloc]initWithFrame:NSMakeRect(0,0,342,285)];self.summary.editable=NO;self.summary.selectable=YES;self.summary.font=[NSFont systemFontOfSize:12];self.summary.autoresizingMask=NSViewWidthSizable;self.summary.textContainer.widthTracksTextView=YES;scroll.documentView=self.summary;[stack addArrangedSubview:scroll];
  NSStackView *buttons=[NSStackView stackViewWithViews:@[button(@"Refresh",self,@selector(refresh:)),button(@"Preferences…",self,@selector(preferences:)),button(@"Close",self,@selector(close:))]];[stack addArrangedSubview:buttons];
  self.popover.contentViewController=vc;
+ if(self.smoke){fprintf(stderr,"Native views created; first tick\n");fflush(stderr);}
  [self tick:nil];[NSTimer scheduledTimerWithTimeInterval:1 target:self selector:@selector(tick:) userInfo:nil repeats:YES];
  if(self.smoke)[self performSelector:@selector(smokeStart) withObject:nil afterDelay:0.5];
 }
@@ -59,7 +61,7 @@ static NSDictionary *readState(void) {
  if(![self.summary.string isEqualToString:text])self.summary.string=text;
  // Only rebuild noninteractive meter views, keeping text selection and controls stable.
  if(self.popover.shown||self.smoke){for(NSView *v in self.meters.arrangedSubviews){[self.meters removeArrangedSubview:v];[v removeFromSuperview];}
-  if(!self.automaticNotice)for(NSDictionary *m in self.state[@"meters"]){[self.meters addArrangedSubview:label([NSString stringWithFormat:@"%@: %.0f%%",m[@"label"],[m[@"percent"] doubleValue]])];NSProgressIndicator *bar=[[NSProgressIndicator alloc]initWithFrame:NSMakeRect(0,0,330,8)];bar.indeterminate=NO;bar.minValue=0;bar.maxValue=100;bar.doubleValue=[m[@"percent"]doubleValue];[bar.widthAnchor constraintEqualToConstant:330].active=YES;[self.meters addArrangedSubview:bar];}}
+  if(!self.automaticNotice)for(NSDictionary *m in self.state[@"meters"]){[self.meters addArrangedSubview:label([NSString stringWithFormat:@"%@: %.0f%%",m[@"label"],[m[@"percent"] doubleValue]])];NSProgressIndicator *bar=[[NSProgressIndicator alloc]initWithFrame:NSMakeRect(0,0,330,8)];bar.indeterminate=NO;bar.minValue=0;bar.maxValue=100;bar.doubleValue=[m[@"percent"]doubleValue];[bar.widthAnchor constraintEqualToConstant:330].active=YES;[bar.heightAnchor constraintEqualToConstant:8].active=YES;[self.meters addArrangedSubview:bar];}}
  if(self.deadline&&[self.deadline timeIntervalSinceNow]<=0)[self close:nil];
  NSString *notice=self.state[@"notice"];if(notice.length&&!self.popover.shown&&!self.settings.visible){self.automaticNotice=notice;[self show:NO];}
 }
@@ -106,15 +108,24 @@ static NSDictionary *readState(void) {
 }
 - (void)error:(NSString *)text {NSAlert *alert=[[NSAlert alloc]init];alert.messageText=@"Could not save preferences";alert.informativeText=text;[alert runModal];}
 - (void)cancel:(id)sender {[self.settings close];}
+- (void)snapshot:(NSView *)view name:(NSString *)name {
+ [view layoutSubtreeIfNeeded];NSBitmapImageRep *rep=[view bitmapImageRepForCachingDisplayInRect:view.bounds];
+ if(!rep){fprintf(stderr,"Native view snapshot unavailable\n");return;}
+ [view cacheDisplayInRect:view.bounds toBitmapImageRep:rep];
+ NSString *dir=NSProcessInfo.processInfo.environment[@"APPDATA"] ?: NSTemporaryDirectory();
+ NSData *data=[rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
+ [data writeToFile:[dir stringByAppendingPathComponent:name] atomically:YES];
+}
 - (void)smokeStart {
  fprintf(stderr,"Checking native controls and preferences\n");fflush(stderr);
  if(!self.status.button||![self.state[@"summary"]containsString:@"Claude usage"]||![self.state[@"summary"]containsString:@"Codex usage"]){fprintf(stderr,"Missing native usage controls\n");exit(1);}
- [self preferences:nil];((NSTextField *)self.fields[@"Primary"]).stringValue=@"25, 50, 75, 100";[self cancel:nil];
+ [self preferences:nil];[self snapshot:self.settings.contentView name:@"macos-preferences.png"];((NSTextField *)self.fields[@"Primary"]).stringValue=@"25, 50, 75, 100";[self cancel:nil];
  NSArray *before=readState()[@"config"][@"primaryThresholds"];if([before count]!=10){fprintf(stderr,"Cancel changed settings\n");exit(1);}
  [self preferences:nil];((NSTextField *)self.fields[@"Primary"]).stringValue=@"25, 50, 75, 100";((NSTextField *)self.fields[@"Seconds"]).stringValue=@"2";[self save:nil];
  NSDictionary *config=readState()[@"config"];if([config[@"primaryThresholds"]count]!=4||[config[@"popupSeconds"]intValue]!=2){fprintf(stderr,"Save failed\n");exit(1);}
  fprintf(stderr,"Preferences Save/Cancel checked\n");fflush(stderr);
  [self show:YES];if(!self.popover.shown||self.meters.arrangedSubviews.count<4){fprintf(stderr,"Popover did not open\n");exit(1);}
+ [self snapshot:self.popover.contentViewController.view name:@"macos-popover.png"];
  [self performSelector:@selector(smokeFinish) withObject:nil afterDelay:4];
 }
 - (void)smokeFinish {if(self.popover.shown){fprintf(stderr,"Popover did not expire\n");exit(1);}fprintf(stdout,"Native macOS controls, Save/Cancel and timed popover passed\n");exit(0);}
@@ -123,6 +134,7 @@ static NSDictionary *readState(void) {
 int bb_run(int smoke) {
  @autoreleasepool {
  if(!NSThread.isMainThread){fprintf(stderr,"AppKit was not started on the main thread\n");return 1;}
+ if(smoke){fprintf(stderr,"Creating NSApplication\n");fflush(stderr);}
  [NSApplication sharedApplication];[NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
  static BurnBarDelegate *delegate;delegate=[[BurnBarDelegate alloc]init];delegate.smoke=smoke;NSApp.delegate=delegate;
  if(smoke){fprintf(stderr,"Starting native AppKit smoke\n");fflush(stderr);}
