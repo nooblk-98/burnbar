@@ -3,7 +3,7 @@
 #   -Resources  regenerate cmd\burnbar\rsrc_windows_amd64.syso (icon, manifest, version info);
 #               only needed when the icon or version changes - the generated file is committed.
 param(
-    [string]$Version = "0.3.0",
+    [string]$Version = "0.4.0",
     [switch]$Resources,
     [switch]$SkipTests
 )
