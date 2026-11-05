@@ -34,7 +34,15 @@ func trayCard(scale float64, readings []usage.Usage, th Theme, notice string, pe
 	}
 	header := float64(len(lines) * 16)
 	w := int(math.Round(320 * scale))
-	h := int(math.Round((float64(30+len(readings)*114) + header) * scale))
+	height := 30.
+	for _, u := range readings {
+		if len(u.All()) == 0 {
+			height += 76
+		} else {
+			height += 114
+		}
+	}
+	h := int(math.Round((height + header) * scale))
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
 	fillRoundRect(img, 0, 0, float64(w), float64(h), 10*scale, th.border)
 	fillRoundRect(img, 1, 1, float64(w)-1, float64(h)-1, 10*scale-1, th.bg)
@@ -42,8 +50,15 @@ func trayCard(scale float64, readings []usage.Usage, th Theme, notice string, pe
 	for i, line := range lines {
 		drawText(img, noticeFace, line, 14*scale, float64(18+i*16)*scale, th.text)
 	}
-	for i, u := range readings {
-		y := (float64(20+i*114) + header) * scale
+	offset := 20.
+	for _, u := range readings {
+		y := (offset + header) * scale
+		hasData := len(u.All()) > 0
+		rowHeight := 114.
+		if !hasData {
+			rowHeight = 76
+		}
+		offset += rowHeight
 		drawText(img, title, u.Name(), 14*scale, y, th.text)
 		status := insights.Health(u, time.Now(), staleAfter)
 		if status != "" {
@@ -53,19 +68,26 @@ func trayCard(scale float64, readings []usage.Usage, th Theme, notice string, pe
 			}
 			drawTextRight(img, small, label, float64(w)-14*scale, y, th.warning())
 		}
-		statusLine := insights.Age(u.UpdatedAt, time.Now())
+		statusLine := insights.Freshness(u, time.Now())
 		if status != "" {
 			statusLine = status + " · " + statusLine
+		}
+		statusOffset := 74
+		if !hasData {
+			statusOffset = 24
 		}
 		for k, line := range wrapText(small, statusLine, 292*scale) {
 			if k >= 2 {
 				break
 			}
-			drawText(img, small, line, 14*scale, y+float64(74+k*12)*scale, th.sub)
+			drawText(img, small, line, 14*scale, y+float64(statusOffset+k*13)*scale, th.sub)
+		}
+		if !hasData {
+			continue
 		}
 		for j, win := range []*usage.Window{u.FiveHour, u.SevenDay} {
 			cy := y + float64(20+j*26)*scale
-			label := usage.WindowShortLabel(win, []string{"1st", "2nd"}[j])
+			label := usage.WindowShortLabel(win, []string{"Session", "Weekly"}[j])
 			drawText(img, body, label, 14*scale, cy, th.sub)
 			value := "–"
 			if win != nil {

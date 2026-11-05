@@ -12,6 +12,7 @@ import (
 	"github.com/nooblk-98/burnbar/internal/alerts"
 	"github.com/nooblk-98/burnbar/internal/config"
 	"github.com/nooblk-98/burnbar/internal/history"
+	"github.com/nooblk-98/burnbar/internal/insights"
 	"github.com/nooblk-98/burnbar/internal/layout"
 	"github.com/nooblk-98/burnbar/internal/render"
 	"github.com/nooblk-98/burnbar/internal/updates"
@@ -33,6 +34,7 @@ const (
 	timerRefresh     = 2 // regular usage refresh
 	timerReset       = 4 // just after the next limit resets
 	timerActive      = 5 // deferred refresh for providers with session activity
+	timerRetry       = 9 // retry rate-limited providers at their deadline
 	timerPopup       = 8 // auto-dismiss milestone notices
 
 	cmdSettings       = 12
@@ -266,6 +268,7 @@ func (a *app) refresh(manual bool) {
 func (a *app) refreshProvider(p usage.Provider, manual bool) {
 	state := a.fetches[p]
 	if !state.beginFetch(time.Now(), manual) {
+		a.scheduleRetryRefresh()
 		return
 	}
 	if a.demo {
@@ -279,25 +282,15 @@ func (a *app) refreshProvider(p usage.Provider, manual bool) {
 	go func() {
 		u := usage.FetchProvider(p)
 		a.mu.Lock()
-		if u.Err != "" {
-			// Keep showing the last good numbers; the tooltip and popup report the error.
-			prev := a.readings[p]
-			u.FiveHour, u.SevenDay, u.Extra, u.Breakdown = prev.FiveHour, prev.SevenDay, prev.Extra, prev.Breakdown
-			if len(prev.All()) > 0 {
-				u.UpdatedAt = prev.UpdatedAt
-			}
-		}
+		u = usage.PreserveLastGood(u, a.readings[p])
 		a.readings[p] = u
 		a.mu.Unlock()
-		state.fetching.Store(false)
 		pPostMessageW.Call(a.main, msgUsage, providerID(p), 0)
 	}()
 }
 
 func (a *app) onUsage(p usage.Provider) {
-	if !a.enabled(p) {
-		return
-	}
+	a.fetches[p].fetching.Store(false)
 	a.mu.Lock()
 	u := a.readings[p]
 	a.mu.Unlock()
@@ -306,14 +299,25 @@ func (a *app) onUsage(p usage.Provider) {
 	case u.RateLimited:
 		state.backoff = min(max(2*state.backoff, 2*time.Minute), 16*time.Minute)
 		state.cooldownUntil = time.Now().Add(state.backoff)
+		if u.RetryAt.After(state.cooldownUntil) {
+			state.cooldownUntil = u.RetryAt
+		}
+		a.mu.Lock()
+		u.RetryAt = state.cooldownUntil
+		a.readings[p] = u
+		a.mu.Unlock()
 	case u.Err == "":
 		state.backoff = 0
 		state.cooldownUntil = time.Time{}
-		if !a.demo {
+		if !a.demo && a.enabled(p) {
 			a.hist[p].Add(u)
 			a.checkAlerts(u)
 			a.checkMilestones(u)
 		}
+	}
+	a.scheduleRetryRefresh()
+	if !a.enabled(p) {
+		return
 	}
 	a.scheduleResetRefresh()
 	a.updateAccessible()
@@ -602,7 +606,7 @@ func (a *app) checkMilestones(u usage.Usage) {
 func (a *app) popupChanged() bool {
 	return a.popupAnchor != a.trayAnchor() || a.popupWork != workArea(a.popupTB) ||
 		a.popupScale != a.renderScale() || a.popupTheme != a.theme() ||
-		a.popupMinute != time.Now().Minute()
+		a.popupMinute != time.Now().Minute() || a.hasRetryStatus()
 }
 
 // dismissPopup collapses details in always-visible mode, or closes a click-only card.
@@ -806,7 +810,7 @@ func (a *app) showMenuAt(pt POINT) {
 	}
 
 	for _, u := range a.snapshot() {
-		status := u.Name() + ": updated " + u.UpdatedAt.Format("3:04 PM")
+		status := u.Name() + ": " + insights.Freshness(u, time.Now())
 		if u.Err != "" {
 			status = u.Name() + ": " + u.Err
 		}
@@ -953,6 +957,15 @@ func mainProc(hwnd, msg, wparam, lparam uintptr) uintptr {
 			a.checkUpdates(false)
 			a.updateAccessible()
 			a.syncPopup()
+		case timerRetry:
+			pKillTimer.Call(a.main, timerRetry)
+			for _, p := range usage.Providers(a.cfg.Providers) {
+				state := a.fetches[p]
+				if !state.cooldownUntil.IsZero() && !time.Now().Before(state.cooldownUntil) {
+					a.refreshProvider(p, false)
+				}
+			}
+			a.scheduleRetryRefresh()
 		case timerRefresh:
 			a.refresh(false)
 		case timerReset:
@@ -1079,4 +1092,29 @@ func winEventProc(hook, event, hwnd, idObject, idChild, thread, ts uintptr) uint
 		pPostMessageW.Call(a.main, msgShellEvent, event, 0)
 	}
 	return 0
+}
+
+// One shared timer uses the earliest pending enabled-provider cooldown.
+func (a *app) scheduleRetryRefresh() {
+	pKillTimer.Call(a.main, timerRetry)
+	now := time.Now()
+	var next time.Time
+	for _, p := range usage.Providers(a.cfg.Providers) {
+		at := a.fetches[p].cooldownUntil
+		if at.After(now) && (next.IsZero() || at.Before(next)) {
+			next = at
+		}
+	}
+	if !next.IsZero() {
+		a.oneShot(timerRetry, min(next.Sub(now), 24*time.Hour))
+	}
+}
+
+func (a *app) hasRetryStatus() bool {
+	for _, u := range a.snapshot() {
+		if u.RateLimited {
+			return true
+		}
+	}
+	return false
 }

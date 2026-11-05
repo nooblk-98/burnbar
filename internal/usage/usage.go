@@ -44,6 +44,7 @@ type Usage struct {
 	Breakdown   []Share   // this week's usage split by product
 	UpdatedAt   time.Time
 	Err         string
+	RetryAt     time.Time // earliest retry permitted by the provider or app backoff
 	RateLimited bool
 }
 
@@ -123,7 +124,7 @@ func FetchRaw() ([]byte, error) {
 	case resp.StatusCode == http.StatusUnauthorized:
 		return nil, errors.New("login rejected - run `claude` to sign in again")
 	case resp.StatusCode == http.StatusTooManyRequests:
-		return nil, errRateLimited
+		return nil, rateLimitError{until: retryAfter(resp.Header.Get("Retry-After"), time.Now())}
 	case resp.StatusCode != http.StatusOK:
 		return nil, fmt.Errorf("usage API returned HTTP %d", resp.StatusCode)
 	}
@@ -134,7 +135,12 @@ func FetchRaw() ([]byte, error) {
 func Fetch() Usage {
 	body, err := FetchRaw()
 	if err != nil {
-		return Usage{Provider: Claude, Err: err.Error(), RateLimited: errors.Is(err, errRateLimited), UpdatedAt: time.Now()}
+		u := Usage{Provider: Claude, Err: err.Error(), RateLimited: errors.Is(err, errRateLimited)}
+		var limited rateLimitError
+		if errors.As(err, &limited) {
+			u.RetryAt = limited.until
+		}
+		return u
 	}
 	return Parse(body)
 }
