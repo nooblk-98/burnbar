@@ -166,6 +166,9 @@ func (m *macApp) quiet() bool {
 }
 func (m *macApp) checkUpdates() {
 	m.lastUpdate = time.Now()
+	m.updateMu.Lock()
+	m.update = "Checking for stable updates…"
+	m.updateMu.Unlock()
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()

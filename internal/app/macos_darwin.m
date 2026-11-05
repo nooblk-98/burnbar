@@ -12,6 +12,7 @@ extern char *bb_save(char *);
 @property NSTextView *summary;
 @property NSStackView *meters;
 @property NSWindow *settings;
+@property NSTextField *updateLabel;
 @property NSMutableDictionary<NSString *, NSControl *> *fields;
 @property NSDictionary *state;
 @property NSMenu *menu;
@@ -57,6 +58,7 @@ static NSDictionary *readState(void) {
 }
 - (void)tick:(id)sender {
  bb_tick();self.state=readState();
+ if(self.settings.visible&&self.updateLabel)self.updateLabel.stringValue=[self.state[@"update"] length]?self.state[@"update"]:@"No update metadata yet";
  NSString *text=self.automaticNotice ?: self.state[@"summary"] ?: @"Loading…";
  if(![self.summary.string isEqualToString:text])self.summary.string=text;
  // Only rebuild noninteractive meter views, keeping text selection and controls stable.
@@ -90,10 +92,10 @@ static NSDictionary *readState(void) {
  NSStackView *stack=[NSStackView stackViewWithViews:@[]];stack.orientation=NSUserInterfaceLayoutOrientationVertical;stack.alignment=NSLayoutAttributeLeading;stack.spacing=8;stack.translatesAutoresizingMaskIntoConstraints=NO;[self.settings.contentView addSubview:stack];[NSLayoutConstraint activateConstraints:@[[stack.leadingAnchor constraintEqualToAnchor:self.settings.contentView.leadingAnchor constant:20],[stack.topAnchor constraintEqualToAnchor:self.settings.contentView.topAnchor constant:20],[stack.trailingAnchor constraintEqualToAnchor:self.settings.contentView.trailingAnchor constant:-20]]];
  self.fields=[NSMutableDictionary dictionary];
  NSArray *rows=@[@[@"Providers",@"Providers (both / claude / codex)",c[@"providers"]?:@"both"],@[@"Seconds",@"Close after seconds (1–300)",[c[@"popupSeconds"]stringValue]],@[@"Interval",@"Refresh minutes (1–60)",[c[@"intervalMinutes"]stringValue]],@[@"Primary",@"Session thresholds (%)",[c[@"primaryThresholds"]componentsJoinedByString:@", "]],@[@"Secondary",@"Weekly thresholds (%)",[c[@"secondaryThresholds"]componentsJoinedByString:@", "]],@[@"QuietStart",@"Quiet start (HH:MM)",[self clock:c[@"quietStart"]]],@[@"QuietEnd",@"Quiet end (HH:MM)",[self clock:c[@"quietEnd"]]]];
- for(NSArray *row in rows){NSTextField *edit=[NSTextField textFieldWithString:row[2]?:@""];[edit.widthAnchor constraintEqualToConstant:280].active=YES;[edit setAccessibilityLabel:row[1]];self.fields[row[0]]=edit;NSStackView *line=[NSStackView stackViewWithViews:@[label(row[1]),edit]];line.spacing=12;[stack addArrangedSubview:line];}
+ for(NSArray *row in rows){NSTextField *edit=[NSTextField textFieldWithString:row[2]?:@""];[edit.widthAnchor constraintEqualToConstant:280].active=YES;[edit setAccessibilityLabel:row[1]];self.fields[row[0]]=edit;NSTextField *caption=label(row[1]);[caption.widthAnchor constraintEqualToConstant:250].active=YES;NSStackView *line=[NSStackView stackViewWithViews:@[caption,edit]];line.spacing=12;[stack addArrangedSubview:line];}
  for(NSArray *row in @[@[@"Milestones",@"Automatic milestone popovers (experimental)",@"milestonePopups"],@[@"QuietHours",@"Enable quiet hours",@"quietHours"],@[@"Forecast",@"Show recent-pace estimates",@"showForecast"],@[@"Updates",@"Check public stable releases daily",@"checkUpdates"]]){NSButton *check=[NSButton checkboxWithTitle:row[1] target:nil action:nil];check.state=[c[row[2]]boolValue]?NSControlStateValueOn:NSControlStateValueOff;self.fields[row[0]]=check;[stack addArrangedSubview:check];}
  [stack addArrangedSubview:label(@"Preview: Focus, startup and global shortcuts are not yet integrated.")];
- [stack addArrangedSubview:label(self.state[@"update"]?:@"")];
+ self.updateLabel=label([self.state[@"update"] length]?self.state[@"update"]:@"No update metadata yet");[stack addArrangedSubview:self.updateLabel];
  [stack addArrangedSubview:label(@"Update: npx --yes burnbar@development update")];
  NSButton *save=button(@"Save",self,@selector(save:));save.keyEquivalent=@"\r";NSButton *cancel=button(@"Cancel",self,@selector(cancel:));cancel.keyEquivalent=@"\e";[stack addArrangedSubview:[NSStackView stackViewWithViews:@[save,cancel,button(@"Release notes",self,@selector(releases:))]]];
  [self.settings center];[self.settings makeKeyAndOrderFront:nil];[NSApp activateIgnoringOtherApps:YES];
@@ -118,7 +120,8 @@ static NSDictionary *readState(void) {
  // system window colour so transparent black text is readable in artifacts.
  NSImage *composite=[[NSImage alloc]initWithSize:view.bounds.size];[composite lockFocus];
  [NSColor.windowBackgroundColor setFill];NSRectFill(NSMakeRect(0,0,view.bounds.size.width,view.bounds.size.height));
- [rep drawInRect:NSMakeRect(0,0,view.bounds.size.width,view.bounds.size.height)];[composite unlockFocus];
+ NSImage *foreground=[[NSImage alloc]initWithSize:view.bounds.size];[foreground addRepresentation:rep];
+ [foreground drawInRect:NSMakeRect(0,0,view.bounds.size.width,view.bounds.size.height) fromRect:NSZeroRect operation:NSCompositingOperationSourceOver fraction:1];[composite unlockFocus];
  NSBitmapImageRep *opaque=[NSBitmapImageRep imageRepWithData:composite.TIFFRepresentation];
  NSData *data=[opaque representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
  [data writeToFile:[dir stringByAppendingPathComponent:name] atomically:YES];
