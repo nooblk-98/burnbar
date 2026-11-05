@@ -213,7 +213,7 @@ func bb_action(action C.int) {
 func bb_state() *C.char {
 	m := mac
 	var lines []string
-	var meters []map[string]any
+	meters := []map[string]any{}
 	for _, p := range usage.Providers(m.cfg.Providers) {
 		u := m.readings[p]
 		lines = append(lines, u.Name()+" usage", insights.Freshness(u, time.Now()))
@@ -295,5 +295,13 @@ func bb_save(raw *C.char) *C.char {
 		return C.CString("Could not save settings")
 	}
 	mac.cfg = c
+	for _, p := range usage.Providers(c.Providers) {
+		if !mac.readings[p].RateLimited {
+			next := time.Now().Add(time.Duration(c.IntervalMinutes) * time.Minute)
+			if mac.next[p].After(next) {
+				mac.next[p] = next
+			}
+		}
+	}
 	return nil
 }

@@ -98,7 +98,7 @@ code is isolated with build constraints and continues to build independently.
 
 - Real Claude Keychain access/denial/rotation and Codex login/RPC behavior.
 - Custom-profile Keychain integration, login items, global shortcuts, Focus and
-  native notification integration; pinned overview and graphical history UI.
+  native notification integration; activity-driven refresh, pinned overview and graphical history UI.
 - Sleep/wake, fullscreen/Spaces, notch/hidden menu bars, monitor changes and Retina.
 - Keyboard/VoiceOver interaction and accessibility appearance settings.
 - Signed/notarized distribution and clean-machine install/update behavior.
