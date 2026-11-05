@@ -50,6 +50,9 @@ type macApp struct {
 	lastUpdate     time.Time
 }
 
+// AppKit must own the process main thread, before main performs any I/O.
+func init() { runtime.LockOSThread() }
+
 var mac *macApp
 
 func Run(demo bool, mode, version string) error {

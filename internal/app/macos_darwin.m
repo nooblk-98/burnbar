@@ -31,6 +31,7 @@ static NSDictionary *readState(void) {
 }
 @implementation BurnBarDelegate
 - (void)applicationDidFinishLaunching:(NSNotification *)notification {
+ if(self.smoke){fprintf(stderr,"AppKit finished launching\n");fflush(stderr);}
  self.status=[[NSStatusBar systemStatusBar] statusItemWithLength:NSVariableStatusItemLength];
  self.status.button.title=@"BurnBar";self.status.button.toolTip=@"Claude and Codex usage";
  self.status.button.target=self;self.status.button.action=@selector(clicked:);
@@ -106,11 +107,13 @@ static NSDictionary *readState(void) {
 - (void)error:(NSString *)text {NSAlert *alert=[[NSAlert alloc]init];alert.messageText=@"Could not save preferences";alert.informativeText=text;[alert runModal];}
 - (void)cancel:(id)sender {[self.settings close];}
 - (void)smokeStart {
+ fprintf(stderr,"Checking native controls and preferences\n");fflush(stderr);
  if(!self.status.button||![self.state[@"summary"]containsString:@"Claude usage"]||![self.state[@"summary"]containsString:@"Codex usage"]){fprintf(stderr,"Missing native usage controls\n");exit(1);}
  [self preferences:nil];((NSTextField *)self.fields[@"Primary"]).stringValue=@"25, 50, 75, 100";[self cancel:nil];
  NSArray *before=readState()[@"config"][@"primaryThresholds"];if([before count]!=10){fprintf(stderr,"Cancel changed settings\n");exit(1);}
  [self preferences:nil];((NSTextField *)self.fields[@"Primary"]).stringValue=@"25, 50, 75, 100";((NSTextField *)self.fields[@"Seconds"]).stringValue=@"2";[self save:nil];
  NSDictionary *config=readState()[@"config"];if([config[@"primaryThresholds"]count]!=4||[config[@"popupSeconds"]intValue]!=2){fprintf(stderr,"Save failed\n");exit(1);}
+ fprintf(stderr,"Preferences Save/Cancel checked\n");fflush(stderr);
  [self show:YES];if(!self.popover.shown||self.meters.arrangedSubviews.count<4){fprintf(stderr,"Popover did not open\n");exit(1);}
  [self performSelector:@selector(smokeFinish) withObject:nil afterDelay:4];
 }
@@ -119,8 +122,11 @@ static NSDictionary *readState(void) {
 
 int bb_run(int smoke) {
  @autoreleasepool {
+ if(!NSThread.isMainThread){fprintf(stderr,"AppKit was not started on the main thread\n");return 1;}
  [NSApplication sharedApplication];[NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
- BurnBarDelegate *delegate=[[BurnBarDelegate alloc]init];delegate.smoke=smoke;NSApp.delegate=delegate;[NSApp run];
+ static BurnBarDelegate *delegate;delegate=[[BurnBarDelegate alloc]init];delegate.smoke=smoke;NSApp.delegate=delegate;
+ if(smoke){fprintf(stderr,"Starting native AppKit smoke\n");fflush(stderr);}
+ [NSApp finishLaunching];[NSApp run];
  }
  return 0;
 }
