@@ -38,12 +38,11 @@ const (
 	settingReleaseNotes
 	settingUpdateCommand
 	settingCopyCommand
-	settingQuietStatus
 )
 
 func (a *app) showSettings() {
 	if a.settings != nil {
-		pShowWindow.Call(a.settings.hwnd, SW_SHOW)
+		pShowWindow.Call(a.settings.hwnd, 9)
 		pSetForegroundWindow.Call(a.settings.hwnd)
 		return
 	}
@@ -235,7 +234,8 @@ func (a *app) saveSettings() {
 			c.MilestoneState.ObserveThresholds(u, c.PrimaryThresholds, c.SecondaryThresholds)
 		}
 	}
-	if c.Hotkey && !a.cfg.Hotkey {
+	acquiredHotkey := c.Hotkey && !a.hotkeyRegistered
+	if acquiredHotkey {
 		if err := a.registerHotkey(); err != nil {
 			a.settingsError(err)
 			return
@@ -243,8 +243,9 @@ func (a *app) saveSettings() {
 	}
 	oldStartup := startupEnabled()
 	rollbackHotkey := func() {
-		if c.Hotkey && !a.cfg.Hotkey {
+		if acquiredHotkey {
 			pUnregisterHotKey.Call(a.main, hotkeyID)
+			a.hotkeyRegistered = false
 		}
 	}
 	if on != oldStartup {
@@ -262,8 +263,9 @@ func (a *app) saveSettings() {
 		a.settingsError(err)
 		return
 	}
-	if !c.Hotkey && a.cfg.Hotkey {
+	if !c.Hotkey && a.hotkeyRegistered {
 		pUnregisterHotKey.Call(a.main, hotkeyID)
+		a.hotkeyRegistered = false
 	}
 	oldMode := a.cfg.Providers
 	a.cfg = c
@@ -286,6 +288,7 @@ func (a *app) registerHotkey() error {
 	if r == 0 {
 		return fmt.Errorf("Ctrl+Alt+B is already in use. Disable that shortcut in the other app, or leave this option off")
 	}
+	a.hotkeyRegistered = true
 	return nil
 }
 func (a *app) snooze(minutes int) {

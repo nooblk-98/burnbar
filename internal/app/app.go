@@ -77,6 +77,7 @@ type app struct {
 	pendingUpdateError            error
 	updateError, updateNotified   string
 	focus                         *focusReader
+	hotkeyRegistered              bool
 
 	demo    bool
 	version string

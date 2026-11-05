@@ -138,7 +138,12 @@ func (w *nativeWindow) layout(dpi int) {
 		pDeleteObject.Call(old)
 	}
 	rect := RECT{Right: int32(float64(w.width) * w.scale), Bottom: int32(float64(w.height) * w.scale)}
-	pAdjustWindowRectEx.Call(uintptr(unsafe.Pointer(&rect)), windowStyle, 0, 0)
+	adjustDPI := user32.NewProc("AdjustWindowRectExForDpi")
+	if adjustDPI.Find() == nil {
+		adjustDPI.Call(uintptr(unsafe.Pointer(&rect)), windowStyle, 0, 0, uintptr(dpi))
+	} else {
+		pAdjustWindowRectEx.Call(uintptr(unsafe.Pointer(&rect)), windowStyle, 0, 0)
+	}
 	width, height := int(rect.Right-rect.Left), int(rect.Bottom-rect.Top)
 	pSetWindowPos.Call(w.hwnd, 0, uintptr(int(area.Left)+(int(area.Right-area.Left)-width)/2), uintptr(int(area.Top)+(int(area.Bottom-area.Top)-height)/2), uintptr(width), uintptr(height), 0x14)
 	w.selectPage(w.page)

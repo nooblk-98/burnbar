@@ -84,9 +84,11 @@ updating; that explicit choice is retained. See [popup behavior](docs/POPUP_BEHA
 ## See it in action
 
 <div align="center">
-<img src="docs/images/milestone-popup-light.png" alt="BurnBar milestone popup, light theme" width="400">
-<img src="docs/images/milestone-popup-dark.png" alt="BurnBar milestone popup, dark theme" width="400">
+<img src="docs/images/milestone-popup-light.png" alt="Compact affected-quota milestone notice, light theme" width="400">
+<img src="docs/images/milestone-popup-dark.png" alt="Compact affected-quota milestone notice, dark theme" width="400">
 <br>
+<img src="docs/images/milestone-popup-high-contrast.png" alt="Compact affected-quota milestone notice, high contrast" width="400">
+
 <sub>Rendered demo previews: a milestone notice that closes automatically. Click to inspect details.</sub>
 </div>
 
