@@ -23,8 +23,9 @@ func Analyze(items []Item) (occupied []Rect, trayLeft int, ok bool) {
 	for _, it := range items {
 		switch {
 		case strings.HasPrefix(it.Class, "SystemTray."):
-			if trayLeft < 0 || int(it.Rect.Left) < trayLeft {
+			if !ok || int(it.Rect.Left) < trayLeft {
 				trayLeft = int(it.Rect.Left)
+				ok = true
 			}
 		case it.Class == "Taskbar.TaskListButtonAutomationPeer", it.Class == "ToggleButton",
 			it.Class == "Button", it.Class == "SearchBox", it.ControlType == 50000, it.ControlType == 50002,
@@ -32,7 +33,7 @@ func Analyze(items []Item) (occupied []Rect, trayLeft int, ok bool) {
 			occupied = append(occupied, it.Rect)
 		}
 	}
-	return occupied, trayLeft, trayLeft >= 0
+	return occupied, trayLeft, ok
 }
 
 // AnalyzeTaskbar ignores flyouts and cached controls outside the taskbar itself.
@@ -40,9 +41,14 @@ func Analyze(items []Item) (occupied []Rect, trayLeft int, ok bool) {
 func AnalyzeTaskbar(items []Item, bounds Rect) ([]Rect, int, bool) {
 	visible := make([]Item, 0, len(items))
 	for _, item := range items {
+		if item.Rect.Right <= item.Rect.Left || item.Rect.Bottom <= item.Rect.Top {
+			continue
+		}
 		if item.Rect.Bottom <= bounds.Top || item.Rect.Top >= bounds.Bottom || item.Rect.Right <= bounds.Left || item.Rect.Left >= bounds.Right {
 			continue
 		}
+		// UIA can expose controls partially outside the taskbar during animation.
+		item.Rect = Rect{max(item.Rect.Left, bounds.Left), max(item.Rect.Top, bounds.Top), min(item.Rect.Right, bounds.Right), min(item.Rect.Bottom, bounds.Bottom)}
 		visible = append(visible, item)
 	}
 	return Analyze(visible)
@@ -117,4 +123,18 @@ func PickSizedSlot(occupied []Rect, left, right, preferred, minimum, margin int,
 		}
 	}
 	return
+}
+
+// MeterRect returns a taskbar-contained meter, or false when the taskbar cannot
+// accommodate it. A full/vertical/auto-hidden taskbar must fall back to the tray,
+// never to a floating window over the user's desktop.
+func MeterRect(taskbar Rect, x, width, height int) (Rect, bool) {
+	if width <= 0 || height <= 0 || taskbar.Right <= taskbar.Left || taskbar.Bottom <= taskbar.Top || taskbar.Bottom-taskbar.Top > taskbar.Right-taskbar.Left {
+		return Rect{}, false
+	}
+	if x < int(taskbar.Left) || x+width > int(taskbar.Right) || height > int(taskbar.Bottom-taskbar.Top) {
+		return Rect{}, false
+	}
+	y := int(taskbar.Top) + (int(taskbar.Bottom-taskbar.Top)-height)/2
+	return Rect{int32(x), int32(y), int32(x + width), int32(y + height)}, true
 }
