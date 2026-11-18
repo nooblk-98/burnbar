@@ -4,18 +4,29 @@
 //! reads only `cursorAuth/accessToken`, then asks Cursor's dashboard service for
 //! the current billing-period usage. Nothing is written back.
 //!
-//! All paths come from `dirs` so the same code works on Windows, macOS and
-//! Linux without a per-platform branch.
+//! State paths come from `dirs` on every platform. On macOS, Cursor's encrypted
+//! Safe Storage token is unlocked through its existing login-keychain item.
 
 use crate::usage::{Provider, Usage, Window};
+#[cfg(any(target_os = "macos", test))]
+use aes::Aes128;
+#[cfg(any(target_os = "macos", test))]
+use base64::{engine::general_purpose::STANDARD, Engine as _};
+#[cfg(any(target_os = "macos", test))]
+use cbc::cipher::{block_padding::Pkcs7, BlockDecryptMut, KeyIvInit};
 use chrono::{DateTime, Utc};
+#[cfg(any(target_os = "macos", test))]
+use pbkdf2::pbkdf2_hmac;
 use rusqlite::{Connection, OpenFlags};
+#[cfg(any(target_os = "macos", test))]
+use sha1::Sha1;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 pub const API_URL: &str =
     "https://api2.cursor.sh/aiserver.v1.DashboardService/GetCurrentPeriodUsage";
 const MAX_BODY: u64 = 1 << 20;
+const SAFE_STORAGE_PREFIX: &str = "cursor-safe-storage:v1:";
 
 #[derive(Debug, Clone)]
 pub struct FetchError {
@@ -82,6 +93,78 @@ pub fn state_paths() -> Vec<PathBuf> {
     paths
 }
 
+#[cfg(any(target_os = "macos", test))]
+fn decrypt_safe_storage(encoded: &str, password: &str) -> Result<String, String> {
+    let mut encrypted = STANDARD
+        .decode(encoded)
+        .map_err(|_| "Cursor Safe Storage token is malformed".to_string())?;
+    if !encrypted.starts_with(b"v10") {
+        return Err("Cursor Safe Storage format is unsupported".into());
+    }
+    let ciphertext = &mut encrypted[3..];
+    let mut key = [0_u8; 16];
+    pbkdf2_hmac::<Sha1>(password.as_bytes(), b"saltysalt", 1003, &mut key);
+    let plaintext = cbc::Decryptor::<Aes128>::new(&key.into(), (&[b' '; 16]).into())
+        .decrypt_padded_mut::<Pkcs7>(ciphertext)
+        .map_err(|_| "Cursor Safe Storage could not be unlocked".to_string())?;
+    let token = std::str::from_utf8(plaintext)
+        .map_err(|_| "Cursor Safe Storage token is malformed".to_string())?
+        .trim();
+    if token.is_empty() {
+        return Err("Cursor is not signed in - sign in to Cursor, then refresh".into());
+    }
+    Ok(token.to_string())
+}
+
+#[cfg(target_os = "macos")]
+fn safe_storage_password() -> Result<String, String> {
+    use std::process::Command;
+
+    for account in ["Cursor Key", "Cursor"] {
+        let output = Command::new("/usr/bin/security")
+            .args([
+                "find-generic-password",
+                "-s",
+                "Cursor Safe Storage",
+                "-a",
+                account,
+                "-w",
+            ])
+            .output();
+        if let Ok(output) = output {
+            if output.status.success() {
+                let password = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if !password.is_empty() {
+                    return Ok(password);
+                }
+            }
+        }
+    }
+    Err("Cursor credentials are locked - allow BurnBar keychain access, then refresh".into())
+}
+
+fn decode_stored_token(value: &str) -> Result<String, String> {
+    let value = value.trim();
+    let value = serde_json::from_str::<String>(value).unwrap_or_else(|_| value.to_string());
+    let value = value.trim();
+    if value.is_empty() {
+        return Err("Cursor is not signed in - sign in to Cursor, then refresh".into());
+    }
+    let Some(encoded) = value.strip_prefix(SAFE_STORAGE_PREFIX) else {
+        return Ok(value.to_string());
+    };
+
+    #[cfg(target_os = "macos")]
+    {
+        return decrypt_safe_storage(encoded, &safe_storage_password()?);
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = encoded;
+        Err("Cursor Safe Storage credentials can only be unlocked on macOS".into())
+    }
+}
+
 fn token_from_database(path: &Path) -> Result<String, String> {
     let flags = OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX;
     let connection = Connection::open_with_flags(path, flags)
@@ -94,15 +177,7 @@ fn token_from_database(path: &Path) -> Result<String, String> {
             |row| row.get(0),
         )
         .map_err(|_| "Cursor is not signed in - sign in to Cursor, then refresh".to_string())?;
-    let value = value.trim();
-    let value = value
-        .strip_prefix('"')
-        .and_then(|value| value.strip_suffix('"'))
-        .unwrap_or(value);
-    if value.is_empty() {
-        return Err("Cursor is not signed in - sign in to Cursor, then refresh".into());
-    }
-    Ok(value.to_string())
+    decode_stored_token(&value)
 }
 
 /// Read Cursor's access token without modifying its state.
@@ -390,5 +465,12 @@ mod tests {
         }
         assert_eq!(token_from_database(&path).unwrap(), "test-token");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn decrypts_cursor_safe_storage_tokens() {
+        let token =
+            decrypt_safe_storage("djEwiSWYXaBIRVFFzU6zHsfmkA==", "fixture-password").unwrap();
+        assert_eq!(token, "fixture-token");
     }
 }

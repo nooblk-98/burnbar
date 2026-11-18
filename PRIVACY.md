@@ -53,7 +53,9 @@ are found through the standard platform data directory; `OPENCODE_DATA_DIR`,
 ### Cursor
 
 Reads only `cursorAuth/accessToken` from Cursor's local `state.vscdb` (opened
-read-only) and posts to Cursor's dashboard `GetCurrentPeriodUsage` service. The
+read-only). On macOS, encrypted tokens are unlocked with Cursor's existing
+`Cursor Safe Storage` login-keychain item; BurnBar never stores the key or token.
+The token is posted to Cursor's dashboard `GetCurrentPeriodUsage` service. The
 response supplies the monthly plan percentage, cycle reset and auto/API splits.
 `CURSOR_STATE_DB` and `CURSOR_ACCESS_TOKEN` are optional overrides.
 

@@ -323,10 +323,13 @@ impl Service {
                 .resets_at
                 .map(|at| at.timestamp() / 60 * 60)
                 .unwrap_or(0);
-            let key = if usage.provider == Provider::Codex {
-                format!("codex/{}", window.key)
-            } else {
-                window.key.clone()
+            // Claude's unqualified keys predate multi-provider support and must
+            // remain readable. Every newer provider is namespaced so equal
+            // window names (for example OpenCode and Cursor `monthly`) cannot
+            // overwrite one another.
+            let key = match usage.provider {
+                Provider::Claude => window.key.clone(),
+                provider => format!("{}/{}", provider.key(), window.key),
             };
             let previous = state.get(&key).cloned();
             let mut current = AlertState {
@@ -635,6 +638,30 @@ mod tests {
         assert!(report.alerts.is_empty(), "the 80% alert is not repeated");
         let report = service.refresh_with(|p| healthy(p, 96.0));
         assert_eq!(report.alerts.len(), 2, "95% is the next level");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn alert_state_namespaces_equal_window_keys_by_provider() {
+        let dir = temp_dir("alert-provider-keys");
+        let mut service = Service::new(&dir);
+        service.config.providers = "all".into();
+        service.refresh_with(|provider| {
+            let mut usage = Usage::new(provider);
+            usage.five_hour = Some(Window::new("monthly", "Monthly", 50.0));
+            usage
+        });
+
+        let keys: Vec<_> = service.config.alert_state.keys().cloned().collect();
+        assert_eq!(
+            keys,
+            [
+                "codex/monthly",
+                "cursor/monthly",
+                "monthly",
+                "opencode/monthly",
+            ]
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 

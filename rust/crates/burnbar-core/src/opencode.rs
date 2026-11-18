@@ -140,7 +140,13 @@ fn read_key_from_database(path: &Path) -> Result<String, String> {
         .map_err(|_| "OpenCode credential store could not be opened".to_string())?;
     let _ = connection.busy_timeout(Duration::from_secs(2));
     let mut statement = connection
-        .prepare("SELECT value FROM credential WHERE integration_id = 'opencode-go'")
+        // OpenCode marks the selected credential with `active`; newer legacy
+        // rows without that flag fall back to the most recently created row.
+        .prepare(
+            "SELECT value FROM credential
+             WHERE integration_id = 'opencode-go'
+             ORDER BY active DESC, time_created DESC, id DESC",
+        )
         .map_err(|_| "OpenCode credential store has no readable credentials".to_string())?;
     let rows = statement
         .query_map([], |row| row.get::<_, String>(0))
@@ -452,7 +458,7 @@ mod tests {
     }
 
     #[test]
-    fn reads_the_key_from_an_opencode_database() {
+    fn reads_the_active_key_from_an_opencode_database() {
         let dir = std::env::temp_dir().join(format!("burnbar-opencode-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
@@ -461,18 +467,32 @@ mod tests {
             let connection = Connection::open(&path).unwrap();
             connection
                 .execute(
-                    "CREATE TABLE credential (integration_id TEXT, value TEXT, active INTEGER, time_updated INTEGER)",
+                    "CREATE TABLE credential (
+                        id TEXT PRIMARY KEY,
+                        integration_id TEXT,
+                        label TEXT NOT NULL,
+                        value TEXT NOT NULL,
+                        active INTEGER,
+                        time_created INTEGER,
+                        time_updated INTEGER
+                    )",
                     [],
                 )
                 .unwrap();
             connection
                 .execute(
-                    "INSERT INTO credential VALUES ('opencode-go', ?1, 1, 1)",
-                    [json!({"type": "key", "key": "test-key"}).to_string()],
+                    "INSERT INTO credential VALUES ('inactive', 'opencode-go', 'newer', ?1, 0, 2, 2)",
+                    [json!({"type": "key", "key": "inactive-key"}).to_string()],
+                )
+                .unwrap();
+            connection
+                .execute(
+                    "INSERT INTO credential VALUES ('active', 'opencode-go', 'selected', ?1, 1, 1, 1)",
+                    [json!({"type": "key", "key": "active-key"}).to_string()],
                 )
                 .unwrap();
         }
-        assert_eq!(read_key_from_database(&path).unwrap(), "test-key");
+        assert_eq!(read_key_from_database(&path).unwrap(), "active-key");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
