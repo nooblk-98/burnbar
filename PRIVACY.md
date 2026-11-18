@@ -31,7 +31,10 @@ The bundled [Windows helper](npm/windows/install.ps1) checks the repository's la
 release, or development prereleases when explicitly selected, using GitHub's API
 and downloads its executable and checksum from GitHub
 over HTTPS. It sends a `BurnBar-Installer` User-Agent; normal network metadata is
-also visible to GitHub. It does not need a provider login or GitHub token.
+also visible to GitHub. It does not need a provider login or GitHub token, but if
+`GITHUB_TOKEN` or `GH_TOKEN` is set in the environment it uses that token only for
+the release-metadata request (to avoid anonymous API rate limits) and never for
+the asset downloads. The token is not stored.
 
 It installs into `%LOCALAPPDATA%\Programs\BurnBar` by default, creates a Start
 menu shortcut for the current user, and can close existing BurnBar processes

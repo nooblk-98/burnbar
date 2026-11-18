@@ -52,6 +52,8 @@ jobs:
 
       - name: Check npm package and stable install/update
         shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           npm ci --ignore-scripts
           if ($LASTEXITCODE -ne 0) { throw "npm ci failed" }

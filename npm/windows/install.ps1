@@ -24,6 +24,12 @@ if (-not [Environment]::Is64BitOperatingSystem) {
 $installPath = [IO.Path]::GetFullPath([Environment]::ExpandEnvironmentVariables($InstallDir))
 $targetExe = Join-Path $installPath 'burnbar.exe'
 $headers = @{ 'User-Agent' = 'BurnBar-Installer'; Accept = 'application/vnd.github+json' }
+# Use a caller-provided token for release metadata when available. CI rate
+# limits are per IP, and anonymous GitHub API calls can be exhausted; the token
+# is only sent to api.github.com, never to asset downloads.
+$apiHeaders = $headers.Clone()
+$token = if ($env:GITHUB_TOKEN) { $env:GITHUB_TOKEN } elseif ($env:GH_TOKEN) { $env:GH_TOKEN } else { $null }
+if ($token) { $apiHeaders['Authorization'] = "Bearer $token" }
 $previousTls = [Net.ServicePointManager]::SecurityProtocol
 $stagePath = $null
 $preserveBackup = $false
@@ -56,7 +62,7 @@ try {
     [Net.ServicePointManager]::SecurityProtocol = $previousTls -bor [Net.SecurityProtocolType]::Tls12
     Write-Host "Checking the latest BurnBar $Channel release..."
     if ($Channel -eq 'stable') {
-        $release = Invoke-RestMethod -Uri 'https://api.github.com/repos/nooblk-98/burnbar/releases/latest' -Headers $headers -TimeoutSec 30
+        $release = Invoke-RestMethod -Uri 'https://api.github.com/repos/nooblk-98/burnbar/releases/latest' -Headers $apiHeaders -TimeoutSec 30
         if ($release.draft -or $release.prerelease -or -not $release.tag_name) {
             throw 'GitHub did not return a published stable release.'
         }
@@ -65,7 +71,7 @@ try {
         # a rolling release, where concurrent clients could fetch a mixed pair.
         $release = $null
         for ($page = 1; $page -le 20; $page++) {
-            $releases = @((Invoke-RestMethod -Uri "https://api.github.com/repos/nooblk-98/burnbar/releases?per_page=100&page=$page" -Headers $headers -TimeoutSec 30))
+            $releases = @((Invoke-RestMethod -Uri "https://api.github.com/repos/nooblk-98/burnbar/releases?per_page=100&page=$page" -Headers $apiHeaders -TimeoutSec 30))
             $release = $releases | Where-Object { -not $_.draft -and $_.prerelease -and $_.tag_name -match '^dev-[0-9]+-[0-9]+$' } | Select-Object -First 1
             if ($release -or $releases.Count -lt 100) { break }
         }
