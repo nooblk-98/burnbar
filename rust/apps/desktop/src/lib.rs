@@ -7,6 +7,7 @@
 use burnbar_core::alerts::reset_text;
 use burnbar_core::config::Config;
 use burnbar_core::service::{RefreshReport, Service};
+use burnbar_core::usage::{mode_for_providers, providers_for_mode, Provider};
 use burnbar_core::{updates, UiState};
 use chrono::Utc;
 use std::collections::HashMap;
@@ -204,55 +205,40 @@ fn build_tray(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let show = MenuItem::with_id(app, "show", "Show usage", true, None::<&str>)?;
     let refresh_item = MenuItem::with_id(app, "refresh", "Refresh now", true, None::<&str>)?;
 
-    let provider_both = tray_check(
-        app,
-        &mut checks,
-        "provider:both",
-        "Claude + Codex",
-        config.providers == "both",
-    )?;
-    let provider_all = tray_check(
-        app,
-        &mut checks,
-        "provider:all",
-        "All providers",
-        config.providers == "all",
-    )?;
+    let enabled_providers = config.providers();
     let provider_claude = tray_check(
         app,
         &mut checks,
         "provider:claude",
-        "Claude only",
-        config.providers == "claude",
+        "Claude",
+        enabled_providers.contains(&Provider::Claude),
     )?;
     let provider_codex = tray_check(
         app,
         &mut checks,
         "provider:codex",
-        "Codex only",
-        config.providers == "codex",
+        "Codex",
+        enabled_providers.contains(&Provider::Codex),
     )?;
     let provider_opencode = tray_check(
         app,
         &mut checks,
         "provider:opencode",
-        "OpenCode only",
-        config.providers == "opencode",
+        "OpenCode",
+        enabled_providers.contains(&Provider::Opencode),
     )?;
     let provider_cursor = tray_check(
         app,
         &mut checks,
         "provider:cursor",
-        "Cursor only",
-        config.providers == "cursor",
+        "Cursor",
+        enabled_providers.contains(&Provider::Cursor),
     )?;
     let providers = Submenu::with_items(
         app,
         "Providers",
         true,
         &[
-            &provider_both,
-            &provider_all,
             &provider_claude,
             &provider_codex,
             &provider_opencode,
@@ -661,7 +647,8 @@ fn threshold_preset(config: &Config) -> Option<&'static str> {
 
 fn tray_item_checked(id: &str, config: &Config) -> bool {
     match id {
-        id if id.starts_with("provider:") => id[9..] == config.providers,
+        id if id.starts_with("provider:") => Provider::from_key(&id[9..])
+            .is_some_and(|provider| config.providers().contains(&provider)),
         id if id.starts_with("refresh-rate:") => id[13..].parse() == Ok(config.interval_minutes),
         id if id.starts_with("popup-delay:") => id[12..].parse() == Ok(config.popup_seconds),
         id if id.starts_with("thresholds:") => threshold_preset(config) == Some(&id[11..]),
@@ -680,6 +667,19 @@ fn tray_item_checked(id: &str, config: &Config) -> bool {
         "toggle:update-checks" => config.check_updates,
         _ => false,
     }
+}
+
+fn toggled_provider_mode(mode: &str, provider: Provider) -> Result<String, String> {
+    let mut providers = providers_for_mode(mode);
+    if providers.contains(&provider) {
+        if providers.len() == 1 {
+            return Err("At least one provider must stay enabled".into());
+        }
+        providers.retain(|enabled| *enabled != provider);
+    } else {
+        providers.push(provider);
+    }
+    mode_for_providers(&providers).ok_or_else(|| "At least one provider must stay enabled".into())
 }
 
 fn sync_tray_checks(app: &AppHandle) {
@@ -702,7 +702,11 @@ fn apply_tray_setting(app: &AppHandle, id: &str) -> Result<(), String> {
         let old = service.settings();
         let mut settings = old.clone();
         match id {
-            id if id.starts_with("provider:") => settings.providers = id[9..].to_string(),
+            id if id.starts_with("provider:") => {
+                let provider =
+                    Provider::from_key(&id[9..]).ok_or_else(|| "Unknown provider".to_string())?;
+                settings.providers = toggled_provider_mode(&old.providers, provider)?;
+            }
             id if id.starts_with("refresh-rate:") => {
                 settings.interval_minutes =
                     id[13..].parse().map_err(|_| "invalid refresh interval")?
@@ -839,6 +843,7 @@ fn handle_tray_menu(app: &AppHandle, id: &str) {
             if let Err(err) = apply_tray_setting(app, id) {
                 eprintln!("could not update {id}: {err}");
                 sync_tray_checks(app);
+                notify(app, "BurnBar settings", &err);
             }
         }
     }
@@ -1291,18 +1296,35 @@ mod tests {
     #[test]
     fn native_tray_marks_exactly_the_saved_choice() {
         let config = Config {
-            providers: "all".into(),
+            providers: "claude,opencode".into(),
             interval_minutes: 5,
             theme: "dark".into(),
             ..Config::default()
         };
 
-        assert!(tray_item_checked("provider:all", &config));
-        assert!(!tray_item_checked("provider:both", &config));
+        assert!(tray_item_checked("provider:claude", &config));
+        assert!(tray_item_checked("provider:opencode", &config));
+        assert!(!tray_item_checked("provider:codex", &config));
+        assert!(!tray_item_checked("provider:cursor", &config));
         assert!(tray_item_checked("refresh-rate:5", &config));
         assert!(!tray_item_checked("refresh-rate:3", &config));
         assert!(tray_item_checked("theme:dark", &config));
         assert!(!tray_item_checked("theme:system", &config));
+    }
+
+    #[test]
+    fn provider_toggle_supports_arbitrary_combinations() {
+        let mode = toggled_provider_mode("both", Provider::Opencode).unwrap();
+        assert_eq!(mode, "claude,codex,opencode");
+    }
+
+    #[test]
+    fn provider_toggle_rejects_disabling_the_last_provider() {
+        let result = toggled_provider_mode("cursor", Provider::Cursor);
+        assert_eq!(
+            result,
+            Err("At least one provider must stay enabled".into())
+        );
     }
 
     #[test]

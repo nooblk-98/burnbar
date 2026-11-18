@@ -405,7 +405,7 @@ impl Service {
 
     pub fn set_provider_mode(&mut self, mode: &str) -> Result<(), String> {
         if !usage::valid_mode(mode) {
-            return Err("Providers must be claude, codex or both".into());
+            return Err("Provider selection is invalid".into());
         }
         let mut settings = Settings::from(&self.config);
         settings.providers = mode.to_string();

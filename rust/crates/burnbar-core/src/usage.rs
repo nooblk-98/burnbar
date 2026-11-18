@@ -43,6 +43,16 @@ impl Provider {
         }
     }
 
+    pub fn from_key(key: &str) -> Option<Self> {
+        match key {
+            "claude" => Some(Provider::Claude),
+            "codex" => Some(Provider::Codex),
+            "opencode" => Some(Provider::Opencode),
+            "cursor" => Some(Provider::Cursor),
+            _ => None,
+        }
+    }
+
     /// JSONL file that holds this provider's readings.
     pub fn history_file(self) -> &'static str {
         match self {
@@ -60,25 +70,54 @@ impl std::fmt::Display for Provider {
     }
 }
 
-/// True for the values accepted by the `providers` config key. `both` keeps its
-/// original Claude + Codex meaning so existing profiles do not change; `all`
-/// adds OpenCode.
+fn parse_provider_mode(mode: &str) -> Option<Vec<Provider>> {
+    match mode {
+        "both" => return Some(vec![Provider::Claude, Provider::Codex]),
+        "all" => return Some(Provider::ALL.to_vec()),
+        _ => {}
+    }
+
+    let mut providers = Vec::new();
+    for key in mode.split(',') {
+        let provider = Provider::from_key(key)?;
+        if providers.contains(&provider) {
+            return None;
+        }
+        providers.push(provider);
+    }
+    (!providers.is_empty()).then_some(providers)
+}
+
+/// True for legacy modes and comma-separated provider combinations.
 pub fn valid_mode(mode: &str) -> bool {
-    matches!(
-        mode,
-        "claude" | "codex" | "opencode" | "cursor" | "both" | "all"
-    )
+    parse_provider_mode(mode).is_some()
 }
 
 /// Resolve a provider mode into the providers that should be polled.
 pub fn providers_for_mode(mode: &str) -> Vec<Provider> {
-    match mode {
-        "codex" => vec![Provider::Codex],
-        "opencode" => vec![Provider::Opencode],
-        "cursor" => vec![Provider::Cursor],
-        "both" => vec![Provider::Claude, Provider::Codex],
-        "all" => Provider::ALL.to_vec(),
-        _ => vec![Provider::Claude],
+    parse_provider_mode(mode).unwrap_or_else(|| vec![Provider::Claude])
+}
+
+/// Store selections in stable provider order while preserving familiar legacy
+/// names for the common single, Claude + Codex, and all-provider modes.
+pub fn mode_for_providers(providers: &[Provider]) -> Option<String> {
+    let selected: Vec<_> = Provider::ALL
+        .iter()
+        .copied()
+        .filter(|provider| providers.contains(provider))
+        .collect();
+    match selected.as_slice() {
+        [] => None,
+        [Provider::Claude, Provider::Codex] => Some("both".into()),
+        providers if providers == Provider::ALL => Some("all".into()),
+        [provider] => Some(provider.key().into()),
+        providers => Some(
+            providers
+                .iter()
+                .map(|provider| provider.key())
+                .collect::<Vec<_>>()
+                .join(","),
+        ),
     }
 }
 
@@ -382,6 +421,25 @@ mod tests {
             ]
         );
         assert_eq!(providers_for_mode("weird"), vec![Provider::Claude]);
+    }
+
+    #[test]
+    fn mixed_provider_modes_preserve_every_selection() {
+        assert_eq!(
+            providers_for_mode("claude,opencode,cursor"),
+            vec![Provider::Claude, Provider::Opencode, Provider::Cursor]
+        );
+    }
+
+    #[test]
+    fn provider_modes_are_stored_in_stable_order() {
+        let mode = mode_for_providers(&[Provider::Cursor, Provider::Claude]).unwrap();
+        assert_eq!(mode, "claude,cursor");
+    }
+
+    #[test]
+    fn empty_provider_modes_are_rejected() {
+        assert!(!valid_mode(""));
     }
 
     #[test]

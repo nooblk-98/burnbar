@@ -22,7 +22,7 @@ pub struct AlertState {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Config {
-    /// `"claude"`, `"codex"` or `"both"`.
+    /// A legacy mode name or a comma-separated set of provider keys.
     #[serde(default = "default_providers")]
     pub providers: String,
     #[serde(default = "default_popup_seconds")]
@@ -249,7 +249,7 @@ impl Config {
         )
     }
 
-    /// Validate values edited in the Settings UI before persisting them.
+    /// Validate values edited from the tray menu before persisting them.
     pub fn validate(&mut self) -> Result<(), String> {
         self.primary_thresholds = alerts::normalize_thresholds(&self.primary_thresholds);
         self.secondary_thresholds = alerts::normalize_thresholds(&self.secondary_thresholds);
@@ -263,7 +263,7 @@ impl Config {
             return Err("Quiet hours must be valid times of day".into());
         }
         if !usage::valid_mode(&self.providers) {
-            return Err("Providers must be claude, codex, opencode, cursor, both or all".into());
+            return Err("At least one recognized provider must be enabled".into());
         }
         if !matches!(self.theme.as_str(), "system" | "light" | "dark") {
             return Err("Theme must be system, light or dark".into());
