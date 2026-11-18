@@ -56,5 +56,5 @@ body:
     attributes:
       label: Help with this integration
       options:
-        - label: I can help test this tool on Windows.
+        - label: I can help test this tool on one or more desktop platforms.
         - label: I am interested in contributing an integration.
