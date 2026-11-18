@@ -16,6 +16,8 @@ See how fast you are using your plans without leaving what you are doing.
 
 <img src="docs/images/burnbar-banner-rounded.png" alt="BurnBar Claude and Codex usage popup on the desktop" width="848">
 
+<img src="docs/images/burnbar-popup-preview.png" alt="BurnBar popup showing Claude, Codex and OpenCode usage with logos" width="560">
+
 </div>
 
 BurnBar is a tray app for the AI coding plans you already pay for. It shows the
