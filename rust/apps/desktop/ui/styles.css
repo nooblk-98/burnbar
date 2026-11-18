@@ -140,24 +140,42 @@ body[data-tail="top"] .compact-popup::after {
 
 .compact-providers {
   flex: 0 0 auto;
-  padding: 10px 14px 2px;
+  padding: 9px 14px 2px;
 }
 
-.compact-provider + .compact-provider {
-  margin-top: 12px;
+.compact-column-heads,
+.compact-provider {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.compact-column-heads {
+  padding: 0 0 4px;
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.compact-provider {
+  align-items: start;
+  padding: 8px 0;
+  border-top: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
 }
 
 .compact-provider-head {
   display: flex;
-  min-height: 19px;
+  min-width: 0;
+  flex-direction: column;
   align-items: baseline;
-  justify-content: space-between;
-  margin-bottom: 3px;
+  gap: 2px;
 }
 
 .compact-provider-head strong {
-  font-size: 1rem;
+  overflow: hidden;
+  max-width: 100%;
+  font-size: 0.9rem;
   font-weight: 650;
+  text-overflow: ellipsis;
 }
 
 .compact-warning {
@@ -165,19 +183,21 @@ body[data-tail="top"] .compact-popup::after {
   font-size: 0.73rem;
 }
 
-.compact-meter {
-  min-height: 29px;
+.compact-quota {
+  min-width: 0;
 }
 
-.compact-meter-line {
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) 43px;
-  align-items: center;
-  gap: 8px;
+.compact-quota-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px;
+  margin-bottom: 5px;
 }
 
 .compact-meter-label {
   color: var(--muted);
+  font-size: 0.72rem;
   font-weight: 600;
 }
 
@@ -197,7 +217,7 @@ body[data-tail="top"] .compact-popup::after {
   background: var(--primary);
 }
 
-.compact-meter-1 .compact-fill {
+.compact-quota-1 .compact-fill {
   background: var(--secondary);
 }
 
@@ -214,18 +234,18 @@ body[data-tail="top"] .compact-popup::after {
 .compact-value {
   color: var(--primary);
   font-variant-numeric: tabular-nums;
-  font-size: 0.85rem;
+  font-size: 0.76rem;
   text-align: right;
 }
 
-.compact-meter-1 .compact-value {
+.compact-quota-1 .compact-value {
   color: var(--secondary);
 }
 
 .compact-reset {
-  margin: 1px 51px 0 42px;
+  margin-top: 4px;
   color: var(--muted);
-  font-size: 0.73rem;
+  font-size: 0.66rem;
   white-space: nowrap;
 }
 
@@ -237,6 +257,8 @@ body[data-tail="top"] .compact-popup::after {
 }
 
 .compact-error {
+  grid-column: 2 / 4;
+  align-self: center;
   color: var(--warning);
 }
 

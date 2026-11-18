@@ -82,16 +82,17 @@ function shortWindowLabel(window, index) {
 function compactMeter(window, index) {
   const elapsed = elapsedFraction(window);
   const value = Math.min(100, Math.max(0, Number(window.percent) || 0));
-  return el("div", { class: `compact-meter compact-meter-${index}` }, [
-    el("div", { class: "compact-meter-line" }, [
+  const reset = resetIn(window.resetsAt).replace("Resets in ", "");
+  return el("div", { class: `compact-quota compact-quota-${index}` }, [
+    el("div", { class: "compact-quota-head" }, [
       el("span", { class: "compact-meter-label", text: shortWindowLabel(window, index) }),
-      el("span", { class: "compact-track" }, [
-        el("span", { class: "compact-fill", style: `width:${value}%` }),
-        elapsed === null ? null : el("span", { class: "compact-pace", style: `left:${Math.round(elapsed * 100)}%` }),
-      ]),
       el("strong", { class: "compact-value", text: percent(window.percent) }),
     ]),
-    window.resetsAt ? el("div", { class: "compact-reset", text: resetIn(window.resetsAt) }) : null,
+    el("span", { class: "compact-track" }, [
+      el("span", { class: "compact-fill", style: `width:${value}%` }),
+      elapsed === null ? null : el("span", { class: "compact-pace", style: `left:${Math.round(elapsed * 100)}%` }),
+    ]),
+    window.resetsAt ? el("div", { class: "compact-reset", text: reset === "Resets now" ? "Resets now" : `${reset} left` }) : null,
   ]);
 }
 
@@ -101,10 +102,10 @@ function compactProvider(view) {
   const windows = [usage.fiveHour, usage.sevenDay].filter(Boolean);
   const body = [el("header", { class: "compact-provider-head" }, [
     el("strong", { text: providerName(provider) }),
-    usage.err ? el("span", { class: "compact-warning", text: "Unavailable" }) : null,
+    usage.err && windows.length ? el("span", { class: "compact-warning", text: "Stale" }) : null,
   ])];
   if (windows.length) body.push(...windows.map(compactMeter));
-  else body.push(el("p", { class: "compact-error", text: usage.err || "Waiting for the first reading…" }));
+  else body.push(el("p", { class: "compact-error", text: usage.err ? "Unavailable · sign in, then refresh" : "Waiting for the first reading…" }));
   return el("section", { class: "compact-provider", dataset: { provider } }, body);
 }
 
@@ -122,7 +123,14 @@ function resizePopup() {
 function render(snapshot) {
   applyAppearance(snapshot.settings);
   const providers = snapshot.providers || [];
-  els.providers.replaceChildren(...providers.map(compactProvider));
+  els.providers.replaceChildren(
+    el("div", { class: "compact-column-heads" }, [
+      el("span"),
+      el("span", { text: "Primary" }),
+      el("span", { text: "Secondary" }),
+    ]),
+    ...providers.map(compactProvider),
+  );
   if (!providers.length) els.providers.replaceChildren(el("p", { class: "compact-error", text: "Choose a provider from the tray menu." }));
   els.aboutVersion.textContent = `Version ${snapshot.version}${snapshot.demo ? " · demo" : ""} · ${snapshot.platform}`;
   resizePopup();
