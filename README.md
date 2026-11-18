@@ -83,6 +83,14 @@ Linux releases also ship a `.deb` you can install directly:
 > need to. You can also build from source below. The app uses the same profile
 > files on every platform.
 
+### Platform testing
+
+| Platform | Status | What was tested |
+| --- | --- | --- |
+| Windows 10/11 | ✅ Passing | Installed with `npx`, tray icon, popup, menu and settings on a real desktop; CI installs and smoke-tests every release |
+| Linux (Ubuntu) | ✅ Passing | Installed the released AppImage with `npx` and ran it end to end on XFCE (X11): tray icon, tray menu, popup placement and rendering. On GNOME Shell (Wayland, with Ubuntu's AppIndicator extension) the app starts and registers its tray icon |
+| macOS (Apple silicon, Intel) | ⏳ Pending | Bundles build in CI, but the app has not been run on a Mac yet |
+
 ## Providers
 
 | Provider | What BurnBar reads | What it shows |
