@@ -923,7 +923,7 @@ fn compact_size(app: &AppHandle) -> (f64, f64) {
         })
         .unwrap_or((2, 1.0));
     let providers = providers.clamp(1, 4);
-    (340.0 * scale, (58.0 + providers as f64 * 106.0) * scale)
+    (290.0 * scale, (58.0 + providers as f64 * 106.0) * scale)
 }
 
 fn position_compact_window(app: &AppHandle, anchor: Option<Rect>, width: f64, height: f64) {

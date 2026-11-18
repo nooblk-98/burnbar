@@ -47,6 +47,21 @@ function providerName(provider) {
   return { codex: "Codex", opencode: "OpenCode", cursor: "Cursor" }[provider] || "Claude";
 }
 
+// Simplified brand marks, drawn inline so they follow the theme and need no assets.
+const LOGOS = {
+  claude: '<svg viewBox="0 0 24 24" fill="none" stroke="#d97757" stroke-width="2.6" stroke-linecap="round"><path d="M12 2.5v19M2.5 12h19M5.3 5.3l13.4 13.4M18.7 5.3L5.3 18.7M8 3.3l8 17.4M16 3.3L8 20.7"/></svg>',
+  codex: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><ellipse cx="12" cy="7" rx="3.2" ry="5"/><ellipse cx="12" cy="7" rx="3.2" ry="5" transform="rotate(60 12 12)"/><ellipse cx="12" cy="7" rx="3.2" ry="5" transform="rotate(120 12 12)"/><ellipse cx="12" cy="7" rx="3.2" ry="5" transform="rotate(180 12 12)"/><ellipse cx="12" cy="7" rx="3.2" ry="5" transform="rotate(240 12 12)"/><ellipse cx="12" cy="7" rx="3.2" ry="5" transform="rotate(300 12 12)"/></svg>',
+  opencode: '<svg viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M4 2h16v20H4zM8 6v12h8V6z"/><path d="M8 11h8v7H8z" opacity=".45"/></svg>',
+  cursor: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 1.5l9.5 5.5v11L12 23.5 2.5 18V7z" opacity=".3"/><path d="M12 12L21.5 7 12 1.5 2.5 7zM12 12v11.5l9.5-5.5V7z"/></svg>',
+};
+
+function providerLogo(provider) {
+  const key = LOGOS[provider] ? provider : "claude";
+  const badge = el("span", { class: `provider-logo provider-logo-${key}`, role: "img", "aria-label": providerName(provider), title: providerName(provider) });
+  badge.innerHTML = LOGOS[key];
+  return badge;
+}
+
 function percent(value) {
   return typeof value === "number" && !Number.isNaN(value) ? `${Math.round(value)}%` : "–";
 }
@@ -101,8 +116,8 @@ function compactProvider(view) {
   const provider = usage.provider || view.provider;
   const windows = [usage.fiveHour, usage.sevenDay].filter(Boolean);
   const body = [el("header", { class: "compact-provider-head" }, [
-    el("strong", { text: providerName(provider) }),
-    usage.err && windows.length ? el("span", { class: "compact-warning", text: "Stale" }) : null,
+    providerLogo(provider),
+    usage.err && windows.length ? el("span", { class: "compact-warning", title: "Stale · last refresh failed", "aria-label": "Stale" }) : null,
   ])];
   if (windows.length) body.push(...windows.map(compactMeter));
   else body.push(el("p", { class: "compact-error", text: usage.err ? "Unavailable · sign in, then refresh" : "Waiting for the first reading…" }));

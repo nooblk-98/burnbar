@@ -12,7 +12,7 @@
       {
         "label": "main",
         "title": "BurnBar",
-        "width": 340,
+        "width": 290,
         "height": 270,
         "resizable": false,
         "visible": false,
