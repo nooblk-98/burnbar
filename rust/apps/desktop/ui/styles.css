@@ -9,6 +9,8 @@
   --accent-soft: #f3e2da;
   --claude: #c2613f;
   --codex: #0f8f70;
+  --opencode: #6b5bd2;
+  --cursor: #3f7cff;
   --warn: #b7791f;
   --danger: #b3261e;
   --ok: #2f7a52;
@@ -33,6 +35,8 @@
     --accent-soft: #3a2a22;
     --claude: #e08a64;
     --codex: #4cc7a3;
+    --opencode: #a99cff;
+    --cursor: #8fb0ff;
     --warn: #e0b45f;
     --danger: #f28b82;
     --ok: #7cc79a;
@@ -56,6 +60,8 @@
   --accent-soft: #3a2a22;
   --claude: #e08a64;
   --codex: #4cc7a3;
+  --opencode: #a99cff;
+  --cursor: #8fb0ff;
   --warn: #e0b45f;
   --danger: #f28b82;
   --ok: #7cc79a;
@@ -244,6 +250,14 @@ summary:focus-visible {
   background: var(--codex);
 }
 
+.card[data-provider="opencode"] .dot {
+  background: var(--opencode);
+}
+
+.card[data-provider="cursor"] .dot {
+  background: var(--cursor);
+}
+
 .card-meta {
   color: var(--muted);
   font-size: 0.75rem;
@@ -336,6 +350,14 @@ summary:focus-visible {
 
 .card[data-provider="codex"] .fill {
   background: var(--codex);
+}
+
+.card[data-provider="opencode"] .fill {
+  background: var(--opencode);
+}
+
+.card[data-provider="cursor"] .fill {
+  background: var(--cursor);
 }
 
 .fill.hot {

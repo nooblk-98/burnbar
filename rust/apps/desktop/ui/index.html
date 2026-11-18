@@ -53,8 +53,11 @@
               <span>Providers</span>
               <select name="providers">
                 <option value="both">Claude and Codex</option>
+                <option value="all">All providers</option>
                 <option value="claude">Claude only</option>
                 <option value="codex">Codex only</option>
+                <option value="opencode">OpenCode only</option>
+                <option value="cursor">Cursor only</option>
               </select>
             </label>
             <label class="field">
@@ -156,7 +159,7 @@
       </header>
       <div class="sheet-body">
         <img src="logo.png" alt="" width="64" height="64" class="about-logo" />
-        <p><strong>Claude and Codex usage at a glance.</strong></p>
+        <p><strong>Claude, Codex, OpenCode and Cursor usage at a glance.</strong></p>
         <p class="muted">One Rust core, one Tauri shell, every desktop platform. Your readings stay on this computer.</p>
         <p class="muted" id="about-version"></p>
         <div class="button-row">

@@ -29,8 +29,8 @@
     "active": true,
     "targets": "all",
     "category": "Utility",
-    "shortDescription": "Claude and Codex usage in your tray",
-    "longDescription": "BurnBar shows Claude and Codex plan usage in a cross-platform tray popup, warns before limits, and keeps a week of readings for pace forecasts.",
+    "shortDescription": "Claude, Codex, OpenCode and Cursor usage in your tray",
+    "longDescription": "BurnBar shows Claude, Codex, OpenCode Go and Cursor plan usage in a cross-platform tray popup, warns before limits, and keeps a week of readings for pace forecasts.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

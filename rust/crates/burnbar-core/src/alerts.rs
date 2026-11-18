@@ -1,6 +1,6 @@
 //! Milestone tracking and notification preferences (Go: `internal/alerts/`).
 
-use crate::usage::{Provider, Usage, Window};
+use crate::usage::{Provider, Usage};
 use chrono::{DateTime, TimeZone, Timelike, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -196,34 +196,6 @@ pub fn normalize_thresholds(values: &[i32]) -> Vec<i32> {
     parse_thresholds(&threshold_text(&clean)).unwrap_or_default()
 }
 
-/// Parse a 24-hour `HH:MM` value into minutes after midnight.
-pub fn parse_clock(value: &str) -> Result<i32, String> {
-    let value = value.trim();
-    let (hour, minute) = value
-        .split_once(':')
-        .ok_or_else(|| "use 24-hour HH:MM, for example 22:00".to_string())?;
-    if hour.is_empty() || hour.len() > 2 || minute.is_empty() || minute.len() != 2 {
-        return Err("use 24-hour HH:MM, for example 22:00".into());
-    }
-    if !hour.chars().all(|c| c.is_ascii_digit()) || !minute.chars().all(|c| c.is_ascii_digit()) {
-        return Err("use 24-hour HH:MM, for example 22:00".into());
-    }
-    let hour: i32 = hour
-        .parse()
-        .map_err(|_| "use 24-hour HH:MM, for example 22:00".to_string())?;
-    let minute: i32 = minute
-        .parse()
-        .map_err(|_| "use 24-hour HH:MM, for example 22:00".to_string())?;
-    if !(0..24).contains(&hour) || !(0..60).contains(&minute) {
-        return Err("use 24-hour HH:MM, for example 22:00".into());
-    }
-    Ok(hour * 60 + minute)
-}
-
-pub fn clock(minutes: i32) -> String {
-    format!("{:02}:{:02}", minutes / 60, minutes % 60)
-}
-
 /// Local wall-clock quiet check, including overnight ranges. Equal endpoints
 /// mean a full quiet day; the enable switch distinguishes this from disabled.
 pub fn quiet<Tz: TimeZone>(
@@ -281,13 +253,10 @@ pub fn reset_text(resets_at: Option<DateTime<Utc>>, now: DateTime<Utc>) -> Strin
     }
 }
 
-pub fn window_percent(window: Option<&Window>) -> f64 {
-    window.map(|w| w.percent).unwrap_or(-1.0)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::usage::Window;
     use chrono::TimeZone;
 
     fn usage(percent: f64, reset: DateTime<Utc>) -> Usage {
@@ -379,12 +348,7 @@ mod tests {
     }
 
     #[test]
-    fn clocks_and_quiet_hours() {
-        assert_eq!(parse_clock("22:00").unwrap(), 1320);
-        assert_eq!(parse_clock(" 8:30 ").unwrap(), 510);
-        assert!(parse_clock("24:00").is_err());
-        assert!(parse_clock("9").is_err());
-        assert_eq!(clock(1320), "22:00");
+    fn quiet_hours_cover_overnight_ranges() {
         // Equal endpoints mean the whole day is quiet.
         let now = Utc.with_ymd_and_hms(2026, 1, 2, 12, 0, 0).unwrap();
         assert!(quiet(now, 0, true, 600, 600));

@@ -29,7 +29,9 @@ compared against the Go source and is covered by tests in this workspace.
 | `internal/layout/*` | 51 | Tauri window | replaced | one centered/docked window |
 | `tools/genres/` | 117 | `apps/desktop/icons/` + `tauri.conf.json` | replaced | Tauri bundler |
 | `cmd/burnbar/main.go` | 119 | `apps/desktop/src/main.rs` | replaced | `--demo`, `--hidden` |
-| `npm/bin/burnbar.cjs` | 400+ | unchanged | pending | npm installer cutover after platform sign-off |
+| `npm/bin/burnbar.cjs` | 95 | unchanged | pending | npm installer cutover after platform sign-off |
+| *(new)* OpenCode Go | — | `burnbar-core/src/opencode.rs` | new | read-only credential store + `/zen/go/v1/usage` |
+| *(new)* Cursor | — | `burnbar-core/src/cursor.rs` | new | read-only `state.vscdb` + dashboard usage |
 
 ## Next steps after this PR
 

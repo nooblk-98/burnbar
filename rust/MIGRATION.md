@@ -86,11 +86,26 @@ cargo test --workspace
 ./scripts/smoke.sh
 ```
 
-The 51 tests include a local HTTP server (`tests/e2e.rs`) that exercises a 200
-response, a 401, a 429 with `Retry-After`, a mocked GitHub release and a full
-two-provider refresh where Codex times out. The Linux CI job also runs the real
+The 62 tests include a local HTTP server (`tests/e2e.rs`) that exercises a 200
+response, a 401, a 429 with `Retry-After`, a mocked GitHub release, mocked
+OpenCode Go and Cursor responses, and a four-provider refresh where the
+schema-backed providers are exercised through their parsers. The Linux CI job also runs the real
 binary for 12 seconds under Xvfb + D-Bus; the build matrix compiles it on
 Windows and macOS.
+
+## Providers added after the Go port
+
+Two providers do not exist in the Go app and were added directly in Rust:
+
+| Provider | Unit | Source | Why it fits the model |
+| --- | --- | --- | --- |
+| OpenCode Go | `burnbar-core::opencode` | OpenCode's read-only SQLite credential store + `opencode.ai/zen/go/v1/usage` | Reports rolling (5h), weekly and monthly allowance percentages with reset times |
+| Cursor | `burnbar-core::cursor` | Cursor's read-only `state.vscdb` + dashboard `GetCurrentPeriodUsage` | Reports the monthly plan percentage, cycle reset, and auto/API splits |
+
+Neither provider needs a per-platform branch: `dirs` resolves the data/config
+folders on Windows, macOS and Linux, and `rusqlite` with the bundled SQLite
+library reads the local stores identically everywhere. Both sources are covered
+by parse, credential-store and mocked-HTTP tests.
 
 ## What the recording cannot prove
 

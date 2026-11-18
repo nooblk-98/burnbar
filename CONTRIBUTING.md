@@ -60,6 +60,23 @@ Documentation-only changes need a review of links, examples, and formatting.
 Use demo mode for public screenshots. Never commit credentials, personal usage
 responses, session logs, or account identifiers. See [PRIVACY.md](PRIVACY.md).
 
+## Project skills
+
+This repository keeps optional agent skills under `.agents/skills/`, pinned in
+`skills-lock.json`: `find-skills` (skill discovery), `tauri-v2`,
+`rust-best-practices` and `frontend-design`. They are documentation for coding
+agents and do not affect the build.
+
+```bash
+npx skills find <query>              # search skills.sh
+npx skills experimental_install      # restore the pinned project skills
+npx skills update                    # refresh them deliberately
+```
+
+Review an installed skill before use: skills run with the agent's permissions.
+Do not add a skill that needs secrets or network access without documenting it
+here first.
+
 ## Cross-platform Rust app
 
 The Tauri implementation in `rust/` is the cross-platform rewrite. The portable

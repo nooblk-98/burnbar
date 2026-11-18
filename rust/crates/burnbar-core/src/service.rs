@@ -4,7 +4,7 @@
 //! The Tauri shell owns windows and tray state; everything here can run in a
 //! unit test without a display.
 
-use crate::alerts::{self, Milestone, Tracker};
+use crate::alerts::{self, Milestone};
 use crate::config::{AlertState, Config};
 use crate::history::{History, Sample};
 use crate::insights;
@@ -135,15 +135,11 @@ pub struct ProviderView {
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UiState {
-    pub config: Config,
     pub settings: Settings,
     pub providers: Vec<ProviderView>,
     pub version: String,
     pub demo: bool,
-    pub first_run: bool,
-    pub now: DateTime<Utc>,
-    /// 80% / 95% and reset notices are Windows-first in the Go app; the Tauri
-    /// shell uses this to label them as native system notifications.
+    /// Operating system name shown in About; the UI has no per-platform layout.
     pub platform: String,
 }
 
@@ -177,24 +173,17 @@ impl Service {
         }
     }
 
-    pub fn load_default() -> Self {
-        Self::new(Config::dir())
-    }
-
     /// Demo mode makes the UI fully explorable without credentials and is used
     /// by the smoke tests. Nothing is written to disk.
     pub fn demo(dir: impl Into<PathBuf>) -> Self {
         let mut service = Self::new(dir);
         service.demo = true;
+        service.config.providers = "all".into();
         for provider in Provider::ALL {
             service.usages.insert(provider, usage::demo_usage(provider));
             service.histories.insert(provider, History::demo());
         }
         service
-    }
-
-    pub fn is_demo(&self) -> bool {
-        self.demo
     }
 
     pub fn first_run(&self) -> bool {
@@ -217,6 +206,8 @@ impl Service {
         self.refresh_with(|provider| match provider {
             Provider::Claude => crate::claude::fetch(),
             Provider::Codex => crate::codex::fetch(),
+            Provider::Opencode => crate::opencode::fetch(),
+            Provider::Cursor => crate::cursor::fetch(),
         })
     }
 
@@ -447,10 +438,6 @@ impl Service {
         Settings::from(&self.config)
     }
 
-    pub fn tracker(&self) -> &Tracker {
-        &self.config.milestone_state
-    }
-
     pub fn snapshot(&self) -> UiState {
         self.snapshot_at(Utc::now())
     }
@@ -492,12 +479,9 @@ impl Service {
         }
         UiState {
             settings: Settings::from(&self.config),
-            config: self.config.clone(),
             providers,
             version: crate::version().to_string(),
             demo: self.demo,
-            first_run: self.first_run,
-            now,
             platform: std::env::consts::OS.to_string(),
         }
     }
@@ -703,8 +687,8 @@ mod tests {
         service.refresh();
         let snapshot = service.snapshot();
         assert!(snapshot.demo);
-        assert_eq!(snapshot.providers.len(), 2);
-        assert!(!snapshot.providers[0].usage.is_empty());
+        assert_eq!(snapshot.providers.len(), 4);
+        assert!(snapshot.providers.iter().all(|view| !view.usage.is_empty()));
         assert!(!dir.join("config.json").exists());
         let _ = std::fs::remove_dir_all(&dir);
     }

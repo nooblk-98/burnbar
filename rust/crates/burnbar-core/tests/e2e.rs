@@ -5,11 +5,10 @@
 //! handling, body limits, JSON decoding and the service loop without leaving
 //! the machine or needing an account.
 
-use burnbar_core::claude;
 use burnbar_core::config::Config;
 use burnbar_core::service::Service;
-use burnbar_core::updates;
 use burnbar_core::usage::{Provider, Window};
+use burnbar_core::{claude, cursor, opencode, updates};
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::thread;
@@ -78,6 +77,80 @@ fn claude_unauthorized_and_rate_limited_are_explained() {
     let error = claude::fetch_raw_from(&url, "token").unwrap_err();
     assert!(error.rate_limited);
     assert!(error.retry_at.is_some());
+}
+
+#[test]
+fn opencode_and_cursor_responses_are_fetched_and_parsed() {
+    let url = serve_once(Response {
+        status: "200 OK",
+        headers: "",
+        body: r#"{"usage":{
+            "rolling":{"status":"ok","percent":7,"resetsAt":"2026-11-18T08:57:48.000Z"},
+            "weekly":{"status":"ok","percent":12,"resetsAt":"2026-11-23T00:00:00.000Z"},
+            "monthly":{"status":"ok","percent":31,"resetsAt":"2026-12-07T11:05:00.000Z"}
+        }}"#
+        .into(),
+    });
+    let raw = opencode::fetch_raw_from(&url, "test-key").expect("opencode fetch");
+    let usage = opencode::parse(&raw);
+    assert_eq!(usage.provider, Provider::Opencode);
+    assert_eq!(usage.err, "");
+    assert_eq!(usage.five_hour.unwrap().percent, 7.0);
+    assert_eq!(usage.extra[0].percent, 31.0);
+
+    let url = serve_once(Response {
+        status: "200 OK",
+        headers: "",
+        body: r#"{
+            "billingCycleStart":"2026-11-01T00:00:00.000Z",
+            "billingCycleEnd":"2026-12-01T00:00:00.000Z",
+            "planUsage":{"limit":2000,"remaining":900,"totalPercentUsed":55,"autoPercentUsed":40}
+        }"#
+        .into(),
+    });
+    let raw = cursor::fetch_raw_from(&url, "test-token").expect("cursor fetch");
+    let usage = cursor::parse(&raw);
+    assert_eq!(usage.provider, Provider::Cursor);
+    assert_eq!(usage.err, "");
+    assert_eq!(usage.five_hour.unwrap().percent, 55.0);
+    assert_eq!(usage.extra.len(), 1);
+}
+
+#[test]
+fn all_provider_mode_polls_every_source() {
+    let dir = std::env::temp_dir().join(format!(
+        "burnbar-all-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos()
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut service = Service::new(&dir);
+    service.config.providers = "all".into();
+    let seen = std::sync::Mutex::new(Vec::new());
+    let report = service.refresh_with(|provider| {
+        seen.lock().unwrap().push(provider);
+        burnbar_core::usage::demo_usage(provider)
+    });
+    assert_eq!(report.fetched.len(), 4);
+    assert_eq!(service.snapshot().providers.len(), 4);
+    let mut seen = seen.into_inner().unwrap();
+    seen.sort();
+    assert_eq!(
+        seen,
+        vec![
+            Provider::Claude,
+            Provider::Codex,
+            Provider::Opencode,
+            Provider::Cursor
+        ]
+    );
+    for provider in Provider::ALL {
+        assert!(dir.join(provider.history_file()).exists());
+    }
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]

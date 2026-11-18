@@ -5,7 +5,7 @@ without per-platform copies of the app. The original Go/Win32/Cocoa application
 stays in the repository as the behavioural reference; this folder is the
 cross-platform rewrite.
 
-<img src="../docs/images/rust-tauri-demo.png" alt="BurnBar running in demo mode with Claude and Codex cards" width="430">
+<img src="../docs/images/rust-tauri-demo.png" alt="BurnBar running in demo mode with provider usage cards" width="430">
 
 ```
 rust/
@@ -14,6 +14,8 @@ rust/
 │   ├── src/usage.rs            Provider, Window, Usage, demo data
 │   ├── src/claude.rs           Claude Code credentials + usage API
 │   ├── src/codex.rs            codex app-server JSON-RPC client
+│   ├── src/opencode.rs         OpenCode Go credential store + usage API
+│   ├── src/cursor.rs           Cursor state store + dashboard usage API
 │   ├── src/config.rs           settings + alert state (Go-compatible JSON)
 │   ├── src/history.rs          JSONL readings and charts data
 │   ├── src/alerts.rs           milestones, thresholds, quiet hours
@@ -37,15 +39,21 @@ renders the interface with the system web view. The result is a single set of
 commands (`get_state`, `refresh_now`, `save_settings`, …) and a single UI for
 all three platforms.
 
-There is **no platform branching in application logic**. The only
-`cfg(target_os)` lines in the new code are:
+There is **no platform branching in application logic**. The only platform
+`cfg`s in the new code are:
 
 - `#[cfg(windows)]` around `CREATE_NO_WINDOW` when spawning the Codex CLI, so a
   console window does not flash from a tray app.
 - `#[cfg(target_os = "macos")]` around the notification permission request.
+- Tauri's standard `#[cfg_attr(mobile, tauri::mobile_entry_point)]` marker,
+  which is inert on desktop.
 
-Everything else — credentials, history paths, tray, notifications, startup,
-shortcuts, themes — is expressed once through `dirs`, Tauri and the plugins.
+Prompt, credentials, history paths, tray, notifications, startup, shortcuts and
+themes are expressed once. Every provider's local state is found through `dirs`
+or an environment override, so OpenCode and Cursor need no per-platform copy;
+their SQLite stores are read with one bundled SQLite build on every target.
+The shell also keeps Tauri's mobile crate types and `mobile_entry_point`, so a
+mobile target can reuse the same `lib.rs` later without restructuring.
 
 ## Build and run
 
@@ -59,8 +67,8 @@ sudo apt install libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev
 ```bash
 cd rust
 cargo run -p burnbar-desktop -- --demo     # sample data, no account needed
-cargo run -p burnbar-desktop                # real Claude/Codex usage
-cargo test --workspace                      # 51 tests, no network or account
+cargo run -p burnbar-desktop                # real provider usage
+cargo test --workspace                      # 62 tests, no network or account
 cargo clippy --workspace --all-targets -- -D warnings
 ./scripts/smoke.sh                          # real binary, headless, demo data
 ```
@@ -76,22 +84,38 @@ cd apps/desktop && cargo tauri build
 
 `--hidden` starts in the tray (used for login startup), `--demo` uses fabricated
 numbers and writes nothing, `BURNBAR_DEMO=1` does the same, and
-`--providers claude|codex|both` limits this run without saving the choice.
+`--providers claude|codex|opencode|cursor|both|all` limits this run without
+saving the choice.
+
+## Providers
+
+| Provider | Usage source | Local material (read-only) |
+| --- | --- | --- |
+| Claude | `api.anthropic.com/api/oauth/usage` | `~/.claude/.credentials.json` (`CLAUDE_CONFIG_DIR`) |
+| Codex | `codex app-server` account RPCs | Codex CLI on `PATH` (`BURNBAR_CODEX_PATH`) |
+| OpenCode Go | `opencode.ai/zen/go/v1/usage` | `opencode.db` under the OpenCode data folder (`OPENCODE_DB`, `OPENCODE_DATA_DIR`, `OPENCODE_GO_API_KEY` overrides) |
+| Cursor | Cursor dashboard `GetCurrentPeriodUsage` | `state.vscdb` under the Cursor config folder (`CURSOR_STATE_DB`, `CURSOR_ACCESS_TOKEN` overrides) |
+
+OpenCode and Cursor stores are read with SQLite in read-only mode; BurnBar never
+writes a token or edits another app's database. The OpenCode credential store is
+found through `dirs::data_local_dir()` (including OpenCode's Windows `Data`
+subfolder) and Cursor through `dirs::config_dir()`, so the same code covers
+Windows, macOS and Linux. `both` keeps its original Claude + Codex meaning;
+choose **All providers** (`all`) to show all four.
 
 ## What carries over
 
 - **Same profile folder and files.** `%APPDATA%\BurnBar`, `~/Library/Application
   Support/BurnBar` or `$XDG_CONFIG_HOME/BurnBar`, with `config.json`,
-  `history.jsonl` and `history-codex.jsonl`. Existing Go profiles load
-  unchanged, including `milestoneState`, `alertState`, thresholds, snooze and
-  quiet hours. Set `BURNBAR_HOME` to use another folder.
-- **Same credentials.** BurnBar only reads `~/.claude/.credentials.json`
-  (honouring `CLAUDE_CONFIG_DIR`) and asks the Codex CLI for account limits
-  (honouring `CODEX_HOME` / `BURNBAR_CODEX_PATH`). It never writes tokens.
+  `history.jsonl`, `history-codex.jsonl` and one history file per new provider.
+  Existing Go profiles load unchanged, including `milestoneState`, `alertState`,
+  thresholds, snooze and quiet hours. Set `BURNBAR_HOME` to use another folder.
+- **Same credentials.** BurnBar only reads the credential stores above. It never
+  writes tokens or opens a login flow.
 - **Same behaviour.** 10% milestone tracking from a baseline, 80%/95% and reset
   alerts, threshold presets, quiet hours and snooze, a week of history, 24h/7d
-  charts, pace markers and conservative forecasts. Errors are kept as data, so a
-  failed fetch never relabels old readings as fresh.
+  charts, pace markers and conservative forecasts — for every provider. Errors
+  are kept as data, so a failed fetch never relabels old readings as fresh.
 - **Same refresh model.** Tray-first window, background refresh every N
   minutes, tray menu with milestones/settings/about/quit, close-to-tray, and
   optional start at login.

@@ -179,10 +179,6 @@ impl History {
     pub fn all(&self) -> &[Sample] {
         &self.samples
     }
-
-    pub fn is_empty(&self) -> bool {
-        self.samples.is_empty()
-    }
 }
 
 #[cfg(test)]

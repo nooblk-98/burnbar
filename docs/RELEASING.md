@@ -31,6 +31,17 @@ Development installs select the newest matching published development release;
 unrelated beta/RC tags are excluded. If a build fails, the previous published build
 remains installable.
 
+## Rust/Tauri builds
+
+The `rust` workflow runs formatting, clippy, the Rust test suite and a headless
+smoke test on Linux, then builds the Tauri app on Windows, macOS and Linux. Each
+job uploads a `burnbar-<platform>` CI artifact and keeps it for seven days.
+
+These artifacts are build verification, not a release channel. The Go executable
+and npm package described above remain the installed product until the Rust app
+has been signed off on each platform and the installer is switched over. Do not
+advertise the artifacts as installable releases.
+
 ## npm installer publishing
 
 The root `package.json` defines the dependency-free `burnbar` CLI. It bundles

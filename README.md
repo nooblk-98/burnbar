@@ -206,7 +206,8 @@ The repository now also contains a single Rust implementation that builds for
 `rust/crates/burnbar-core` (usage providers, config, history, alerts, insights,
 updates) and the tray shell is a Tauri 2 app in `rust/apps/desktop`. There are no
 per-platform app variants: the same tray menu, commands and HTML/CSS/JS interface
-run everywhere.
+run everywhere. In addition to Claude and Codex, the Rust build shows
+**OpenCode Go** and **Cursor** usage; choose **All providers** in Settings.
 
 ```bash
 cd rust

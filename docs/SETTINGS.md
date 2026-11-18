@@ -146,6 +146,8 @@ A 429 response is not your quota percentage. With no successful reading yet,
 BurnBar shows an unavailable-data message rather than empty quota bars or a false
 "Updated just now". After a previous success, its values and original timestamp
 remain visible as last-known data. A retry countdown shows the provider cooldown.
+
+<img src="images/rate-limit-no-data.png" alt="Rate-limited provider shown as unavailable with a retry countdown" width="380">
 Manual refresh, scheduled polling and activity refresh all respect it. BurnBar
 uses exponential backoff (2–16 minutes) and waits longer if a `Retry-After` header
 requires it; a dedicated timer retries at that deadline. It cannot remove a

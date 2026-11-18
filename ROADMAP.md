@@ -1,9 +1,10 @@
 # BurnBar roadmap
 
-BurnBar currently supports Claude and Codex in the Windows notification area. More AI tool
-support is the next main direction. Priorities depend on community requests,
-maintainer time, and whether a tool exposes a reliable way to read usage limits;
-there are no promised release dates.
+BurnBar currently supports Claude and Codex in the Windows notification area, with
+a cross-platform Rust/Tauri implementation in [`rust/`](rust/README.md) building
+for Windows, macOS and Linux. More AI tool support is the next main direction.
+Priorities depend on community requests, maintainer time, and whether a tool
+exposes a reliable way to read usage limits; there are no promised release dates.
 
 ## Available now
 
@@ -13,11 +14,14 @@ there are no promised release dates.
 - Custom session/weekly thresholds, snooze, quiet hours and compact/native notices.
 - Native settings, keyboard shortcuts and readable usage for assistive technology.
 - Visible freshness, cautious pace forecasts and user-controlled stable update checks.
+- Portable Rust core and Tauri tray app for Windows, macOS and Linux, with the
+  same profile files and usage providers as the Go app.
 
 ## Next priorities
 
 | Work | Status | How to help |
 | --- | --- | --- |
+| Sign off and package the Rust/Tauri build for Windows, macOS and Linux | In progress | Run the demo build on your platform and report tray, notification and autostart issues |
 | Evaluate additional AI tools and their usage sources | Accepting requests | [Request an AI tool](https://github.com/nooblk-98/burnbar/issues/new?template=02-ai-tool-request.yml) |
 | Make adding providers simpler across fetching, settings, and rendering | Planned groundwork | [Discuss an implementation](https://github.com/nooblk-98/burnbar/issues/new?title=Provider%20integration%20groundwork&labels=enhancement) |
 | Improve coverage of tray popup layouts, timeouts and scaling combinations | Ongoing | [Report a reproducible issue](https://github.com/nooblk-98/burnbar/issues/new?template=01-bug-report.yml) |

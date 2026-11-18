@@ -29,6 +29,11 @@ queue a backlog. Fullscreen hides an existing automatic card and cancels it.
 
 ## Manual inspection and preferences
 
+<div align="center">
+<img src="images/tray-popup-light.png" alt="Tray-anchored Claude and Codex overview, light theme" width="380">
+<img src="images/tray-popup-dark.png" alt="Tray-anchored Claude and Codex overview, dark theme" width="380">
+</div>
+
 - Click the tray icon to open the overview; click the card for full details.
 - Clicking an automatic notice promotes it to a timed manual view and restarts the configured delay.
 - Manual views close after the same selected delay. Deliberate clicks restart the

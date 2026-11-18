@@ -46,7 +46,7 @@ impl std::fmt::Display for FetchError {
 impl std::error::Error for FetchError {}
 
 /// Claude Code's configuration folder.
-pub fn claude_dir() -> PathBuf {
+fn claude_dir() -> PathBuf {
     if let Some(dir) = std::env::var_os("CLAUDE_CONFIG_DIR") {
         if !dir.is_empty() {
             return PathBuf::from(dir);
@@ -57,7 +57,7 @@ pub fn claude_dir() -> PathBuf {
         .join(".claude")
 }
 
-pub fn credentials_path() -> PathBuf {
+fn credentials_path() -> PathBuf {
     claude_dir().join(".credentials.json")
 }
 

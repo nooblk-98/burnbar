@@ -8,7 +8,11 @@ Provider CLIs and services have their own settings and policies.
 The cross-platform app in [`rust/`](rust/README.md) follows the same data-access
 rules described below: it reads Claude Code's stored credential file without
 modifying it, asks the local Codex CLI for account limits, sends no telemetry and
-checks updates from public release metadata only. Settings and history live in
+checks updates from public release metadata only. It also reads OpenCode's
+`opencode.db` and Cursor's `state.vscdb` with SQLite in read-only mode, using only
+the OpenCode Go API key or Cursor access token, then requests usage from
+`opencode.ai/zen/go/v1/usage` and Cursor's dashboard service. It never writes to
+those databases or refreshes their tokens. Settings and history live in
 the platform's user config folder — `%APPDATA%\BurnBar` on Windows,
 `~/Library/Application Support/BurnBar` on macOS and
 `$XDG_CONFIG_HOME/BurnBar` (usually `~/.config/BurnBar`) on Linux — or in

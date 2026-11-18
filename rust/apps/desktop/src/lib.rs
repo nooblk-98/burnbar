@@ -49,6 +49,7 @@ pub struct UpdateInfo {
     pub available: bool,
 }
 
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let args: Vec<String> = std::env::args().collect();
     let demo = args.iter().any(|arg| arg == "--demo")
@@ -202,7 +203,7 @@ fn build_tray(app: &mut tauri::App, milestones: bool) -> Result<(), Box<dyn std:
     let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/32x32.png"))?;
     TrayIconBuilder::with_id("main")
         .icon(icon)
-        .tooltip("BurnBar — Claude and Codex usage")
+        .tooltip("BurnBar — Claude, Codex, OpenCode and Cursor usage")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {
@@ -497,18 +498,25 @@ fn save_settings(
     state: State<'_, AppState>,
     settings: Settings,
 ) -> Result<UiState, String> {
-    let (snapshot, autostart, hotkey, providers_changed) = {
+    let (snapshot, autostart, hotkey, providers_changed, milestones) = {
         let mut service = state.service()?;
         let old_providers = service.config.providers.clone();
         service.apply_settings(settings)?;
         let autostart = service.config.start_with_windows.unwrap_or(true);
         let hotkey = service.config.hotkey;
         let providers_changed = service.config.providers != old_providers;
-        (service.snapshot(), autostart, hotkey, providers_changed)
+        let milestones = service.config.milestone_popups;
+        (
+            service.snapshot(),
+            autostart,
+            hotkey,
+            providers_changed,
+            milestones,
+        )
     };
     apply_autostart(&app, autostart);
     apply_hotkey(&app, hotkey);
-    set_milestone_check(&app, snapshot.config.milestone_popups);
+    set_milestone_check(&app, milestones);
     wake_scheduler(&app);
     let _ = app.emit("state-changed", &snapshot);
     if providers_changed {
@@ -645,11 +653,6 @@ mod tests {
         );
         assert!(text.contains("62% used (60% crossed)"));
         assert!(text.contains("Resets in 42m"));
-    }
-
-    #[test]
-    fn alerts_module_is_used_for_reset_text() {
-        assert_eq!(burnbar_core::alerts::clock(1320), "22:00");
     }
 
     #[test]

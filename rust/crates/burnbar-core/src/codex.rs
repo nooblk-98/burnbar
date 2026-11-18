@@ -16,18 +16,6 @@ use std::time::Duration;
 const RPC_TIMEOUT: Duration = Duration::from_secs(25);
 const RATE_LIMIT_CODE: i64 = 429;
 
-/// Codex CLI's configuration folder (`CODEX_HOME` wins).
-pub fn codex_dir() -> PathBuf {
-    if let Some(dir) = std::env::var_os("CODEX_HOME") {
-        if !dir.is_empty() {
-            return PathBuf::from(dir);
-        }
-    }
-    dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".codex")
-}
-
 fn is_script(path: &Path) -> bool {
     path.extension()
         .and_then(|ext| ext.to_str())

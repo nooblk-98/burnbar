@@ -115,6 +115,23 @@ Win32 message-only window with one implementation that builds on all targets.
 A second launch focuses the existing tray window instead of racing on history
 files.
 
+## D13 — OpenCode and Cursor read local stores through `dirs`
+
+**Question.** OpenCode and Cursor keep credentials in app-specific SQLite
+databases. Do they need platform-specific readers?
+
+**Decision.** No. Locate the stores with `dirs::data_local_dir()` and
+`dirs::config_dir()`, support the OpenCode Windows `Data` layout as an
+additional candidate, and read them with one bundled SQLite build
+(`rusqlite`/`libsqlite3-sys`) in read-only mode. Allow explicit environment
+overrides for unusual setups.
+
+**Why.** Cursor's folder is the standard config directory on all three
+platforms; OpenCode's data folder follows `XDG`/macOS/Windows conventions.
+Keeping candidate paths in one list avoids a second implementation and keeps the
+"same code on every platform" rule. Reading only `cursorAuth/accessToken` and
+`opencode-go` means BurnBar never enumerates or writes other app data.
+
 ## D12 — Update checks stay metadata-only
 
 **Decision.** Read the public GitHub `releases/latest` JSON, validate the tag and

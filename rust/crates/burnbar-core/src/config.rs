@@ -191,10 +191,6 @@ impl Config {
         config
     }
 
-    pub fn save(&self) -> Result<(), String> {
-        self.save_to(&Self::dir())
-    }
-
     pub fn save_to(&self, dir: &Path) -> Result<(), String> {
         std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
         let path = Self::path_in(dir);
@@ -241,10 +237,6 @@ impl Config {
         usage::providers_for_mode(&self.providers)
     }
 
-    pub fn interval(&self) -> std::time::Duration {
-        std::time::Duration::from_secs(self.interval_minutes.max(1) as u64 * 60)
-    }
-
     /// True when snooze or scheduled quiet hours should suppress notices.
     /// Quiet hours are wall-clock times in the user's local time zone.
     pub fn quiet_now(&self) -> bool {
@@ -254,13 +246,6 @@ impl Config {
             self.quiet_hours,
             self.quiet_start,
             self.quiet_end,
-        )
-    }
-
-    pub fn threshold_text(&self) -> (String, String) {
-        (
-            alerts::threshold_text(&self.primary_thresholds),
-            alerts::threshold_text(&self.secondary_thresholds),
         )
     }
 
@@ -278,7 +263,7 @@ impl Config {
             return Err("Quiet hours must be valid times of day".into());
         }
         if !usage::valid_mode(&self.providers) {
-            return Err("Providers must be claude, codex or both".into());
+            return Err("Providers must be claude, codex, opencode, cursor, both or all".into());
         }
         if !matches!(self.theme.as_str(), "system" | "light" | "dark") {
             return Err("Theme must be system, light or dark".into());

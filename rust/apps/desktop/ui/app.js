@@ -64,6 +64,20 @@ function applyAppearance(settings) {
   root.style.fontSize = `${14 * (scale / 100)}px`;
 }
 
+function providerName(provider) {
+  if (provider === "codex") return "Codex";
+  if (provider === "opencode") return "OpenCode";
+  if (provider === "cursor") return "Cursor";
+  return "Claude";
+}
+
+function providerColor(provider) {
+  if (provider === "codex") return "var(--codex)";
+  if (provider === "opencode") return "var(--opencode)";
+  if (provider === "cursor") return "var(--cursor)";
+  return "var(--claude)";
+}
+
 function percent(value) {
   if (typeof value !== "number" || Number.isNaN(value)) return "—";
   return `${Math.round(value)}%`;
@@ -119,6 +133,15 @@ function healthClass(health) {
 
 function errorHint(provider, message) {
   const text = message.toLowerCase();
+  if (provider === "opencode") {
+    if (text.includes("subscription")) {
+      return "Subscribe to OpenCode Go in the OpenCode Console, then refresh.";
+    }
+    return "Connect OpenCode Go in OpenCode, then refresh. BurnBar only reads the key it stores.";
+  }
+  if (provider === "cursor" && (text.includes("sign in") || text.includes("login") || text.includes("cursor is not"))) {
+    return "Sign in to the Cursor app on this computer, then refresh.";
+  }
   if (text.includes("sign in") || text.includes("login") || text.includes("token") || text.includes("credentials")) {
     return provider === "codex"
       ? "Open a terminal, run `codex login`, then refresh."
@@ -250,7 +273,7 @@ function chartBlock(view, color) {
 function providerCard(view) {
   const usage = view.usage || {};
   const provider = usage.provider || view.provider;
-  const color = provider === "codex" ? "var(--codex)" : "var(--claude)";
+  const color = providerColor(provider);
   const windows = [usage.fiveHour, usage.sevenDay].filter(Boolean);
   const extras = Array.isArray(usage.extra) ? usage.extra : [];
   const breakdown = Array.isArray(usage.breakdown) ? usage.breakdown : [];
@@ -260,7 +283,7 @@ function providerCard(view) {
     el("div", { class: "card-head" }, [
       el("h2", { class: "card-title" }, [
         el("span", { class: "dot" }),
-        document.createTextNode(provider === "codex" ? "Codex" : "Claude"),
+        document.createTextNode(providerName(provider)),
       ]),
       el("div", { class: "card-meta" }, [
         view.health ? el("span", { class: `pill ${healthClass(view.health)}`, text: view.health }) : null,
@@ -317,11 +340,9 @@ function renderStatus(snapshot) {
   if (snapshot.demo) return "Demo data — no account needed";
   const problems = snapshot.providers
     .filter((view) => view.health)
-    .map((view) => `${view.usage.provider === "codex" ? "Codex" : "Claude"}: ${view.health}`);
+    .map((view) => `${providerName(view.usage.provider)}: ${view.health}`);
   if (problems.length) return problems.join(" · ");
-  const names = snapshot.providers.map((view) =>
-    view.usage.provider === "codex" ? "Codex" : "Claude"
-  );
+  const names = snapshot.providers.map((view) => providerName(view.usage.provider));
   if (!names.length) return "No provider selected";
   return `${names.join(" and ")} ${names.length > 1 ? "are" : "is"} up to date`;
 }
