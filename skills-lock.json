@@ -1,6 +1,14 @@
 {
   "version": 2,
   "skills": {
+    "codebase-cleanup-refactor-clean": {
+      "source": "sickn33/agentic-awesome-skills",
+      "commit": "12c0d66d3c007b8109edb0e7211812119be09d84",
+      "sourceType": "github",
+      "skillPath": "skills/codebase-cleanup-refactor-clean/SKILL.md",
+      "computedHash": "4496d65f5c9ab89654ac827d2e98e15ce4661950c124d0f0a2897ed46cc7615d",
+      "installMode": "copy"
+    },
     "find-skills": {
       "source": "vercel-labs/skills",
       "commit": "57217cf86ba38148a57af9e90d14a4c049558330",

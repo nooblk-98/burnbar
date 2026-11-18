@@ -1,150 +1,99 @@
 # Privacy and data access
 
-This document describes BurnBar's own behavior in the current source code.
-Provider CLIs and services have their own settings and policies.
+BurnBar reads existing provider logins and shows usage locally. It does not proxy
+provider traffic, run analytics, or upload usage. Provider services and CLIs have
+their own policies.
 
-## Rust/Tauri build
+## npx installation (Windows)
 
-The cross-platform app in [`rust/`](rust/README.md) follows the same data-access
-rules described below: it reads Claude Code's stored credential file without
-modifying it, asks the local Codex CLI for account limits, sends no telemetry and
-checks updates from public release metadata only. It also reads OpenCode's
-`opencode.db` and Cursor's `state.vscdb` with SQLite in read-only mode, using only
-the OpenCode Go API key or Cursor access token, then requests usage from
-`opencode.ai/zen/go/v1/usage` and Cursor's dashboard service. It never writes to
-those databases or refreshes their tokens. Settings and history live in
-the platform's user config folder — `%APPDATA%\BurnBar` on Windows,
-`~/Library/Application Support/BurnBar` on macOS and
-`$XDG_CONFIG_HOME/BurnBar` (usually `~/.config/BurnBar`) on Linux — or in
-`BURNBAR_HOME` when that variable is set. It does not implement the
-Windows-specific focus/fullscreen inspection described below; notifications are
-left to the operating system's own quiet-time rules.
+The npx command downloads the installer package from npm (or GitHub) and runs the
+bundled PowerShell helper. No install/postinstall hook runs BurnBar automatically.
 
-## npx installation
+The [Windows helper](npm/windows/install.ps1) reads public release metadata from
+`https://api.github.com/repos/nooblk-98/burnbar/releases` and downloads the
+executable and its SHA-256 checksum over HTTPS from GitHub. It sends a
+`BurnBar-Installer` User-Agent. It needs no provider login or GitHub token; if
+`GITHUB_TOKEN` or `GH_TOKEN` is set, that token is used only for the metadata
+request and never for asset downloads. The token is not stored.
 
-The npx command downloads the installer package through npm (or GitHub when using
-its GitHub package specifier); these services receive normal package-request
-metadata. The dependency-free CLI invokes the PowerShell script bundled in that
-package. No install/postinstall lifecycle hook runs BurnBar automatically.
+It installs under `%LOCALAPPDATA%\Programs\BurnBar`, can create a Start menu
+shortcut, and can stop a running BurnBar to replace it. Settings and history in
+`%APPDATA%\BurnBar` are preserved. `--no-start` installs without launching.
 
-The bundled [Windows helper](npm/windows/install.ps1) checks the repository's latest stable
-release, or development prereleases when explicitly selected, using GitHub's API
-and downloads its executable and checksum from GitHub
-over HTTPS. It sends a `BurnBar-Installer` User-Agent; normal network metadata is
-also visible to GitHub. It does not need a provider login or GitHub token, but if
-`GITHUB_TOKEN` or `GH_TOKEN` is set in the environment it uses that token only for
-the release-metadata request (to avoid anonymous API rate limits) and never for
-the asset downloads. The token is not stored.
+## Provider access
 
-It installs into `%LOCALAPPDATA%\Programs\BurnBar` by default, creates a Start
-menu shortcut for the current user, and can close existing BurnBar processes
-in the same Windows session to perform an update. It keeps the existing
-`%APPDATA%\BurnBar` settings and histories. Use `--no-start` to install without
-launching; in that mode it only closes an instance at the selected install path.
-
-## Provider authentication and network requests
+BurnBar only reads the credentials below; it never writes them, refreshes tokens,
+or asks for a password.
 
 ### Claude
 
-BurnBar reads the OAuth access token saved by Claude Code in
-`%USERPROFILE%\.claude\.credentials.json`, or the equivalent file under
-`CLAUDE_CONFIG_DIR` when that environment variable is set. It uses the token to
-request account usage from `https://api.anthropic.com/api/oauth/usage` over HTTPS.
-The response supplies quota percentages, reset times, and available usage
-breakdowns. BurnBar does not modify or refresh the credential file; Claude Code
-handles sign-in and token renewal.
+Reads the OAuth token Claude Code stores in `~/.claude/.credentials.json`
+(`CLAUDE_CONFIG_DIR` if set) and requests
+`https://api.anthropic.com/api/oauth/usage` over HTTPS. The response supplies
+quota percentages, reset times and the product breakdown. Claude Code handles
+sign-in and token renewal.
 
 ### Codex
 
-BurnBar locates the installed Codex CLI and starts a short-lived local
-`codex app-server` process. It initializes the connection, calls `account/read`
-with token refresh disabled, then calls `account/rateLimits/read` to obtain
-plan limits. The process is stopped when the request finishes. BurnBar does not
-start model turns or conversations through that connection.
+Starts a short-lived local `codex app-server` process, initializes it, calls
+`account/read` with token refresh disabled, then `account/rateLimits/read`. The
+process is stopped afterwards. BurnBar does not start model turns or read Codex
+credential files. `CODEX_HOME` and `BURNBAR_CODEX_PATH` select the CLI's
+configuration/executable; the CLI controls its own service traffic.
 
-The Codex CLI handles its own authentication and service requests. BurnBar does
-not read Codex credential files or copy Codex tokens. `CODEX_HOME` selects the
-CLI's configuration location; `BURNBAR_CODEX_PATH` can select a native executable.
-The CLI's configured services and network settings determine its network behavior.
+### OpenCode Go
 
-## Local activity and Windows information
+Reads only the `opencode-go` credential from OpenCode's local SQLite store
+(`opencode.db`, opened read-only) and requests
+`https://opencode.ai/zen/go/v1/usage` with a `burnbar/<version>` User-Agent. The
+response supplies rolling, weekly and monthly allowance percentages. Data folders
+are found through the standard platform data directory; `OPENCODE_DATA_DIR`,
+`OPENCODE_DB` and `OPENCODE_GO_API_KEY` are optional overrides.
 
-BurnBar watches file/directory change notifications under Claude Code's
-`projects` folder and Codex's `sessions` folder to schedule usage refreshes.
-The watcher does not read conversation contents, prompts, or source code.
+### Cursor
 
-For popup placement, BurnBar reads its notification icon's rectangle and the
-monitor work area. It does not inspect taskbar controls or use UI Automation.
-Fullscreen detection reads the foreground window's class, process filename, and
-bounds, only to hide/suppress popups. Windows theme, high-contrast system colours and display scaling are also
-read locally. BurnBar reads the shell notification state and, when supported,
-Windows Focus-session status to suppress automatic notices. Quiet schedules and
-snooze are evaluated locally; Windows quiet settings are never changed. Native tray tooltips are temporarily cleared while a card is open.
+Reads only `cursorAuth/accessToken` from Cursor's local `state.vscdb` (opened
+read-only) and posts to Cursor's dashboard `GetCurrentPeriodUsage` service. The
+response supplies the monthly plan percentage, cycle reset and auto/API splits.
+`CURSOR_STATE_DB` and `CURSOR_ACCESS_TOKEN` are optional overrides.
 
-On its first normal launch with a new profile, BurnBar enables **Start with Windows**
-by adding the executable to the current user's startup registry entry. Existing
-preferences are preserved, and the option can be turned off in BurnBar's menu.
-The choice is saved so later launches do not override an opt-out. Demo and
-diagnostic modes do not automatically add a startup entry.
+## Local app data
 
-Choosing **Open GitHub repository** in the menu opens the project's public GitHub
-page in your default browser. The About dialog itself does not make a network request.
-
-## Stable update checks
-
-When enabled (default), the app requests public latest-stable metadata from
-`https://api.github.com/repos/nooblk-98/burnbar/releases/latest` at launch and at
-most daily while running. Settings can disable automatic checks; Check now is
-manual. Requests have a `BurnBar update check` User-Agent and no authorization
-header, usage history, provider credentials or account identifiers. GitHub sees
-normal network-request metadata. Release notes open GitHub in your browser.
-Copy command writes only the displayed install/update command to your clipboard.
-The app does not download or install an update automatically.
-
-Forecasts are calculated locally from existing percentage/timestamp history.
-The optional global Ctrl+Alt+B shortcut registers only that combination; it is
-not a keyboard logger. Readable usage uses standard Windows accessibility controls.
-
-## Data saved on your PC
-
-BurnBar stores its files under `%APPDATA%\BurnBar\`:
+Settings and history live in the standard user config folder — `%APPDATA%\BurnBar`
+on Windows, `~/Library/Application Support/BurnBar` on macOS and
+`$XDG_CONFIG_HOME/BurnBar` on Linux. `BURNBAR_HOME` selects another folder.
 
 | File | Contents |
 | --- | --- |
-| `config.json` | Provider selection, startup preference, popup/theme/text-size preferences and close delay, threshold lists, snooze expiry, local quiet-hour schedule, hotkey/update-check/forecast preferences, refresh interval, and alert state, including quota percentages, reset timestamps, and milestone high-water levels/window durations used to avoid duplicate popup notifications |
+| `config.json` | Provider selection, refresh interval, popup delay, thresholds, snooze, quiet hours, theme/text size, autostart, hotkey and update preferences, plus milestone/alert state used to avoid duplicate notices |
 | `history.jsonl` | Claude session and weekly percentages with timestamps |
-| `history-codex.jsonl` | Codex primary and secondary percentages with timestamps |
+| `history-codex.jsonl` | Codex percentages with timestamps |
+| `history-opencode.jsonl` | OpenCode Go allowance percentages with timestamps |
+| `history-cursor.jsonl` | Cursor plan percentages with timestamps |
 
-History is compacted to the most recent eight days when it is loaded. Files can
-continue growing while the app stays running. These files are ordinary local
-files, without application-level encryption, and use your Windows profile's
-access controls. BurnBar does not save provider access tokens in these files.
-Older `ClaudeUsageMeter` settings may be migrated into the BurnBar folder.
+History is compacted to eight days. The files are ordinary local files with your
+account's access controls; BurnBar does not add encryption and never stores
+provider tokens there.
 
-Usage responses are also held in memory to draw the meter and details panel.
-BurnBar's code does not include telemetry, analytics, or cloud synchronization.
-Its own direct HTTP usage request is to Anthropic, and optional update metadata requests go to GitHub; Codex service traffic is
-handled by the installed CLI. Your system's network/proxy settings still apply.
+## Notifications and startup
 
-## Diagnostics and shared reports
+Milestone and alert notices are sent through the operating system, which applies
+its own Focus/Do Not Disturb rules. BurnBar does not inspect foreground windows,
+screen contents or other applications. Start at login is handled by the Tauri
+autostart plugin for the current user and can be disabled in Settings.
 
-Usage summaries from `-once` and provider error messages can contain local paths.
-They are not uploaded automatically. The old taskbar-layout diagnostic was removed
-with the taskbar-widget implementation.
+## Update checks
 
-Before opening a public issue, review screenshots and output, remove account or
-personal information, and never attach credential files, access tokens, or
-private session logs. Demo mode (`-demo`) supplies synthetic usage readings and
-does not fetch provider usage or write usage history, although it still loads
-normal settings.
+When enabled, the app reads public latest-stable metadata from
+`https://api.github.com/repos/nooblk-98/burnbar/releases/latest`. Requests carry a
+`BurnBar update check` User-Agent and no credentials, usage history or account
+identifiers. The app never downloads or installs an update automatically.
 
-## Remove stored data
+## Data removal and reports
 
-Turn off **Start with Windows** if enabled, then exit BurnBar and remove its
-executable and `%APPDATA%\BurnBar\` folder to delete its settings and history.
-This does not remove or sign out your provider CLIs. Keeping BurnBar running
-while deleting its data can cause the files to be created again.
+Turn off Start at login, exit BurnBar and delete its executable and the BurnBar
+config folder. This does not sign out provider CLIs or remove their data.
 
-For implementation details, see [usage access](internal/usage),
-[activity watching](internal/app/watch.go), [settings](internal/config/config.go),
-and [history storage](internal/history/history.go).
+Before sharing a screenshot or log, remove account names and usage numbers. Demo
+mode (`--demo`) uses synthetic readings and writes nothing. Never attach
+credential files, tokens or private session logs to an issue.

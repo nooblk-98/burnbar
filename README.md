@@ -4,257 +4,141 @@
 
 # BurnBar
 
+**Claude, Codex, OpenCode Go and Cursor usage in your tray.**<br>
+See how fast you are using your plans without leaving what you are doing.
+
 [![Build](https://github.com/nooblk-98/burnbar/actions/workflows/build.yml/badge.svg)](https://github.com/nooblk-98/burnbar/actions/workflows/build.yml)
+[![Rust](https://github.com/nooblk-98/burnbar/actions/workflows/rust.yml/badge.svg)](https://github.com/nooblk-98/burnbar/actions/workflows/rust.yml)
 [![Release](https://img.shields.io/github/v/release/nooblk-98/burnbar?include_prereleases&label=release)](https://github.com/nooblk-98/burnbar/releases)
-[![Go](https://img.shields.io/github/go-mod/go-version/nooblk-98/burnbar)](go.mod)
 [![Rust](https://img.shields.io/badge/rust-1.80%2B-DEA584?logo=rust)](rust/README.md)
-[![Platform](https://img.shields.io/badge/platform-Windows%2010%20%7C%2011-0078D4)](#installation)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-2f6f4e)](#install)
 [![License](https://img.shields.io/github/license/nooblk-98/burnbar)](LICENSE)
 
-**Claude and Codex usage at a glance, beside your Windows tray.**<br>
-See how fast you're burning through your plan limits without leaving what you're doing.
-
-[Features](#features) • [See it in action](#see-it-in-action) • [Installation](#installation) • [Build from source](#build-from-source)
-
-<img src="docs/images/burnbar-banner-rounded.png" alt="BurnBar Claude and Codex usage popup on the Windows desktop" width="848">
+<img src="docs/images/rust-tauri-demo.png" alt="BurnBar tray window showing Claude and Codex usage cards" width="430">
 
 </div>
 
-Claude and Codex have session and longer-term plan limits. BurnBar keeps both providers in a tray-anchored card when you need it, warns you before you run out, and shows whether you're using them faster than the time
-window allows. Use both together, or select one from **Usage providers** in the right-click menu.
-Codex window lengths come from your account rather than assuming every plan uses the same limits.
+BurnBar is a tray app for the AI coding plans you already pay for. It shows the
+usage windows each provider reports, warns before a limit, and keeps a week of
+readings so you can see your pace. It reads existing local logins; it does not
+proxy your traffic or send usage anywhere.
 
 > [!NOTE]
-> BurnBar is an unofficial community project, not affiliated with or endorsed by Anthropic or OpenAI.
-> "Claude" and "Codex" belong to their respective owners.
+> BurnBar is an unofficial community project, not affiliated with or endorsed by
+> Anthropic, OpenAI, OpenCode or Cursor.
 
 ## Features
 
-- **Brief milestone popups**: by default, a small framed card appears when either
-  provider's primary/session or secondary/weekly quota crosses **10%, 20%, … 100%**.
-  It shows only affected quotas by default, takes no focus, and closes after the selected delay (**6 seconds** by default).
-  More updates do not keep extending it. Jumps show only the highest new milestone,
-  not a burst of every skipped threshold.
-- **Notification preferences**: independent session/weekly thresholds (10% or 25%
-  presets, or custom values), snooze, local quiet hours, compact/full/native notice
-  styles and Windows shell/Focus suppression. Manual inspection stays available.
-- **Native settings and readable usage**: one settings window; keyboard controls,
-  optional Ctrl+Alt+B shortcut, a screen-reader-friendly text view, high-contrast
-  system colours and configurable popup theme/text size.
-- **Freshness and forecasts**: visible update age/error status; optional recent-pace
-  time-to-limit estimates in details when enough reliable history exists.
-- **Stable update checks**: public GitHub release metadata, release-notes links and
-  a copyable update command. No automatic installation.
-- **Quiet by default**: first readings establish a baseline instead of replaying
-  old milestones. Saved per-window state avoids duplicates on refresh or restart;
-  quota resets rearm the tracker. Threshold lists and notice style are configurable in Settings. Crossings are detected on the next successful
-  refresh, not continuously between API reads.
-- **Your choice**: click the tray icon any time to inspect usage; click an automatic
-  notice for details. Manual popups also close after the selected delay; clicks restart
-  their timer. Right-click → **Automatic usage milestones** disables automatic
-  cards for click-only use. **Always show popup (optional)**
-  restores a persistent overview if preferred. Esc or clicking elsewhere closes
-  manual views unless always-show is enabled.
-- **Fullscreen-aware**: no automatic popup appears over a fullscreen app, and missed
-  milestones are not queued to interrupt you afterwards. Cards follow light/dark
-  theme, DPI and the notification icon, and remain inside the monitor's work area.
-- **Configurable close delay**: **Close popup after** applies to both automatic and
-  manually opened views: 3, 5, 6, 10, 15, 30 or 60 seconds. Your selection survives
-  restarts. Background usage refreshes do not extend the timer.
-- **No tooltip overlap**: the native tray tooltip is hidden while a popup is visible
-  and restored once it closes.
-- **Pace marker**: a tick on each bar shows how much of the window's time has passed.
-  A bar past its tick means usage is ahead of an even pace; future usage may change.
-- **Details panel**: separate provider panels, reported quota windows, reset times, and independent
-  24-hour and 7-day history charts. Claude also shows this week's usage by product when available.
-- **Alerts**: Windows notifications at 80% and 95%, and when a limit you'd been close to resets.
-- **Fresh numbers**: refreshes on a schedule, within a minute of Claude Code or Codex activity, and right after
-  a limit resets, backing off automatically if the API rate-limits.
-- **Tray-only**: no taskbar widget or overlay windows. The popup follows the primary
-  notification icon and remains inside that monitor's work area.
-- **Lightweight**: one native executable, installed or updated with npx. Codex usage uses your existing Codex CLI.
-- **Start with Windows**: enabled on first launch for new users; turn it off from the
-  right-click menu at any time. Existing startup preferences are preserved.
-- **About**: right-click the popup or tray icon for the app version, developer credits,
-  and a link to this repository.
+- **Four providers.** Claude, Codex, OpenCode Go and Cursor, with their reported
+  session, weekly or monthly windows and reset times. Choose any combination in
+  Settings.
+- **Tray-first window.** Click the tray icon to inspect usage; close the window
+  and BurnBar keeps running. One tray menu, one window and one codebase on
+  Windows, macOS and Linux.
+- **Milestone cards.** A small card appears when a quota crosses 10%, 20%, … 100%.
+  Notice only the highest new milestone, not every skipped threshold, and never
+  replay old milestones after a restart.
+- **Notifications.** Independent session/weekly thresholds, 80% and 95% alerts,
+  reset alerts, snooze, quiet hours, and native or in-app notice styles.
+- **History and pace.** 24-hour and 7-day charts for every provider, a pace marker
+  on each bar, and optional time-to-limit estimates once there is enough history.
+- **Clear status.** See how old a reading is, when a provider needs sign-in, and
+  when a rate limit will retry. Failed refreshes keep the last good numbers
+  without pretending they are fresh.
+- **Settings that stick.** Refresh interval, popup delay, provider selection,
+  theme, text size, start at login, Ctrl+Alt+B and always-show. Stored in the
+  same profile format the app has always used.
+- **Privacy by default.** Read-only access to local credentials, no telemetry,
+  no proxy, and update checks that only read public release metadata.
+- **Lightweight.** One Rust/Tauri executable and a system web view. No background
+  service, no taskbar widget and no overlay windows.
 
-Existing installations using the previous always-visible default switch to the
-quieter milestone mode once on upgrade. You can opt back into always-show after
-updating; that explicit choice is retained. See [popup behavior](docs/POPUP_BEHAVIOR.md) and the [settings guide](docs/SETTINGS.md).
+## Install
 
-## See it in action
+### Windows (npx)
 
-<div align="center">
-<img src="docs/images/milestone-popup-light.png" alt="Compact affected-quota milestone notice, light theme" width="400">
-<img src="docs/images/milestone-popup-dark.png" alt="Compact affected-quota milestone notice, dark theme" width="400">
-<br>
-<img src="docs/images/milestone-popup-high-contrast.png" alt="Compact affected-quota milestone notice, high contrast" width="400">
-
-<sub>Rendered demo previews: a milestone notice that closes automatically. Click to inspect details.</sub>
-</div>
-
-## Installation
-
-You need Windows 10 or 11 and a signed-in provider:
-
-- **Claude:** [Claude Code](https://claude.com/claude-code) signed in with a Claude subscription.
-- **Codex:** [Codex CLI](https://developers.openai.com/codex/cli/) signed in with **ChatGPT**
-  (`codex login`). API-key-only accounts do not provide these subscription usage limits.
-  BurnBar also detects the CLI bundled with the Windows Codex desktop app when available.
-
-Both providers are available from the tray; automatic notices show the affected provider. A missing login affects only that provider. Select
-**Usage providers** from the right-click menu to hide a provider you don't use.
-
-### Install or update with npx
-
-Requires [Node.js 22+](https://nodejs.org/) (includes npm/npx) and Windows PowerShell
-5.1. BurnBar itself does not need Node.js after installation. No administrator
-access or npm login is required.
+You need Windows 10 or 11, Node.js 22+ and a signed-in provider.
 
 ```powershell
-# Install or update the latest stable release
 npx --yes burnbar@latest install
-
-# Install or update the latest development build (may contain bugs)
-npx --yes burnbar@development install
-
-# Explicitly switch an existing development installation back to stable
-npx --yes burnbar@latest update --channel stable
 ```
 
-The `latest` npm channel selects stable binaries; `development` selects development
-prereleases. Stable npm packages and GitHub binaries are published together from
-version tags on main. Development packages are published from development pushes.
-
-`install` and `update` perform the same verified process. Running the command
-again updates the executable; there is no background auto-updater. Switching
-channels preserves settings, history and startup preferences.
-
-```powershell
-# Optional: another folder, without launching
-npx --yes burnbar@latest update --install-dir 'D:\Apps\BurnBar' --no-start
-
-# Check release metadata without installing
-npx --yes burnbar@development install --dry-run
-```
-
-Both channels install into `%LOCALAPPDATA%\Programs\BurnBar` by default, verify
-SHA-256 before replacement, and create a Start menu shortcut. The reviewed Windows
-helper is bundled inside the npm package; no remote script is fetched and executed.
-`--dry-run` changes no files or running processes. Development builds may contain
-bugs; stable installs exclude prereleases. See [release setup](docs/RELEASING.md).
-
-On its first normal launch, BurnBar enables **Start with Windows** for a new profile.
-You can disable it from the right-click menu. Demo and diagnostic modes do not enable it.
-
-> [!NOTE]
-> BurnBar is distributed **unsigned**. Windows Smart App Control may block it,
-> and SmartScreen may show *Windows protected your PC*.
-
-### If Smart App Control blocks BurnBar (Windows 11)
+The installer downloads the checksum-verified `burnbar.exe` from GitHub Releases
+and installs it to `%LOCALAPPDATA%\Programs\BurnBar`. Use
+`npx --yes burnbar@latest update` to update. Development builds use
+`--channel development`. Neither command enables an automatic updater.
 
 > [!WARNING]
-> Turning off Smart App Control reduces protection for your whole PC. Recent Windows
-> updates support turning it back on, but availability depends on your device and
-> configuration. If Windows warns that restoring it requires a reset or reinstall,
-> do not proceed expecting a temporary change.
+> BurnBar is distributed **unsigned**, so Windows Smart App Control or
+> SmartScreen may warn about it. Verify the SHA-256 published with the release if
+> you need to.
 
-1. Install the latest Windows updates before changing this setting.
-2. Open **Windows Security > App & browser control > Smart App Control settings**.
-3. If you trust the download and choose to proceed, select **Off** before running
-   BurnBar. Read the confirmation carefully.
-4. Run the npx install command above again, then launch BurnBar.
-5. Afterwards, return to **Smart App Control settings** and select **On**, if
-   available. Restart if Windows asks, and confirm protection is on.
+### macOS and Linux
 
-Turning protection back on may block BurnBar again. Running it once does not create
-an exception for the app. See [Microsoft's Smart App Control FAQ](https://support.microsoft.com/en-us/windows/security/threat-malware-protection/smart-app-control-frequently-asked-questions)
-for current requirements and limitations.
+There is no signed installer yet. Build the app from source below, or use the
+CI artifacts attached to a run of the `rust` workflow. The app uses the same
+profile files on every platform.
+
+## Providers
+
+| Provider | What BurnBar reads | What it shows |
+| --- | --- | --- |
+| Claude | Claude Code's stored OAuth token | 5-hour session, weekly, extra model windows, product breakdown |
+| Codex | Local `codex app-server` account RPCs | Account-reported session/weekly windows and durations |
+| OpenCode Go | OpenCode's read-only credential store | 5-hour rolling, weekly and monthly allowance |
+| Cursor | Cursor's read-only local session | Monthly plan usage, auto/API splits, cycle reset |
+
+Credentials never leave your computer except as the provider's own authenticated
+usage request. See [PRIVACY.md](PRIVACY.md).
 
 ## Build from source
 
-You need [Go 1.26+](https://go.dev/dl/) on Windows.
+You need [Rust 1.80+](https://rustup.rs/). On Linux also install WebKitGTK and
+AppIndicator:
 
-```powershell
-git clone https://github.com/nooblk-98/burnbar.git
-cd burnbar
-.\build.ps1
-.\bin\burnbar.exe
+```bash
+sudo apt install libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev
 ```
-
-`build.ps1` runs vet and any locally available tests, then builds `bin\burnbar.exe`.
-Add `-Resources` to regenerate the icon, manifest and version info, or `-SkipTests`
-to skip local tests. Test sources are excluded from Git.
-
-The executable also accepts a few flags for development:
-
-| Flag | Description |
-|---|---|
-| `-demo` | Show sample numbers and history without calling the API |
-| `-providers both` | Show Claude and Codex; also accepts `claude` or `codex`. Defaults to the saved menu setting. |
-| `-snapshot <dir>` | Render popup PNG previews in both themes, then exit. Combine with `-demo -providers both`. |
-| `-once` | Print usage summaries for the selected providers, then exit. Needs a console build: `go build -o bin\burnbar-cli.exe ./cmd/burnbar` |
-
-> [!WARNING]
-> Local builds and release builds are unsigned, so Windows **Smart App Control** may block them.
-> See [Releasing BurnBar](docs/RELEASING.md) for the release process.
-
-## Cross-platform Rust app (Tauri)
-
-The repository now also contains a single Rust implementation that builds for
-**Windows, macOS and Linux** from one codebase. The portable logic lives in
-`rust/crates/burnbar-core` (usage providers, config, history, alerts, insights,
-updates) and the tray shell is a Tauri 2 app in `rust/apps/desktop`. There are no
-per-platform app variants: the same tray menu, commands and HTML/CSS/JS interface
-run everywhere. In addition to Claude and Codex, the Rust build shows
-**OpenCode Go** and **Cursor** usage; choose **All providers** in Settings.
 
 ```bash
 cd rust
-cargo run -p burnbar-desktop -- --demo   # sample data, no sign-in needed
-cargo test --workspace                   # unit + mock-HTTP integration tests
+cargo run -p burnbar-desktop -- --demo   # sample data, no account needed
+cargo run -p burnbar-desktop             # real provider usage
+cargo test --workspace                   # unit and mock-HTTP integration tests
+cargo build --release -p burnbar-desktop
 ```
 
-The Rust app reads the same profile files as the Go app, so existing settings and
-history carry over. The port was planned with
-[rust-anything](https://github.com/erkamyaman/rust-anything); see
-[rust/MIGRATION.md](rust/MIGRATION.md) for the unit mapping and
-[rust/DECISIONS.md](rust/DECISIONS.md) for the architecture decisions. The Go
-build above remains the current packaged Windows release until the Rust build has
-been signed off on each platform.
+Installers need the Tauri CLI:
 
-<details>
-<summary><strong>Project layout</strong></summary>
-
-```
-cmd/burnbar/          entry point, flags, embedded icon and manifest
-internal/app/         Windows UI: tray icon, timed popups, details panel, menus and Win32
-internal/usage/       Claude usage client and Codex app-server account client
-internal/render/      drawing the meter, details panel, charts and tray icon
-internal/layout/      popup placement and fullscreen visibility
-internal/config/      settings and alert state
-internal/alerts/      custom milestones, quiet-hour policy and popup lifetime
-internal/insights/    local data health and conservative recent-pace estimates
-internal/updates/     public stable-release checks (no automatic installation)
-internal/history/     usage history for the charts
-tools/genres/         icon and Windows resource generator
-rust/                 cross-platform Rust core + Tauri desktop app
-assets/               app icon
-docs/                 screenshots and release guide
-.github/workflows/    CI, GitHub releases and optional winget publishing
+```bash
+cargo install tauri-cli --version "^2"
+cd rust/apps/desktop && cargo tauri build
 ```
 
-</details>
+Flags: `--demo` uses sample data and writes nothing, `--hidden` starts in the
+tray, and `--providers claude|codex|opencode|cursor|both|all` limits one run
+without saving the choice.
+
+## Project layout
+
+```
+rust/
+├── crates/burnbar-core/   portable providers, config, history, alerts, forecasts
+└── apps/desktop/          Tauri tray shell + one HTML/CSS/JS interface
+npm/                       npx installer for Windows releases
+docs/                      screenshots and release notes
+.github/workflows/         Rust CI, Windows release, npm and winget publishing
+```
+
+Details: [rust/README.md](rust/README.md) · [release process](docs/RELEASING.md)
+· [privacy](PRIVACY.md)
 
 ## Contributing
 
-Contributors are welcome! Bug fixes, documentation improvements, and new AI tool
-integrations are all appreciated. Feel free to open a pull request.
+Bug reports, provider integrations and documentation fixes are welcome. See
+[CONTRIBUTING.md](CONTRIBUTING.md) for the Rust checks and the project skills
+pinned under `.agents/skills`.
 
-See the [contribution guide](CONTRIBUTING.md) for setup and checks, the
-[roadmap](ROADMAP.md) for upcoming work, and [privacy details](PRIVACY.md) for data
-access and storage.
+## License
 
-Support for more AI tools is coming soon. To request a specific tool or suggest a
-feature, [open an issue](https://github.com/nooblk-98/burnbar/issues/new/choose) and tell us
-what you would like to see.
+[MIT](LICENSE)

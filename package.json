@@ -1,13 +1,13 @@
 {
   "name": "burnbar",
   "version": "0.0.0",
-  "description": "Install or update the BurnBar Windows tray usage monitor",
+  "description": "Install or update the BurnBar tray usage monitor on Windows",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/nooblk-98/burnbar"
   },
-  "homepage": "https://github.com/nooblk-98/burnbar#installation",
+  "homepage": "https://github.com/nooblk-98/burnbar#install",
   "bugs": {
     "url": "https://github.com/nooblk-98/burnbar/issues"
   },

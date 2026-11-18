@@ -1,18 +1,16 @@
 # Build output
 /bin/
 /dist/
-/.build/
 *.exe
-*.test
-*.test.exe
 *.out
-*.prof
 
-# Local test sources
-*_test.go
-*.Tests.ps1
-/test/
-/tests/
+# Rust / Tauri build output
+/rust/target/
+/rust/apps/desktop/gen/
+
+# npm packaging and dependencies
+node_modules/
+*.tgz
 
 # Editors and OS
 .vscode/
@@ -24,11 +22,3 @@ desktop.ini
 
 # Local Claude Code settings
 .claude/settings.local.json
-
-# npm packaging and dependencies
-node_modules/
-*.tgz
-
-# Rust / Tauri build output
-/rust/target/
-/rust/apps/desktop/gen/
