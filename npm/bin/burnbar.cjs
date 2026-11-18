@@ -9,15 +9,18 @@ const help = `BurnBar installer ${pkg.version}
 
 Usage: burnbar [install|update] [options]
   --channel stable|development  Release channel (default: matches installer package)
-  --install-dir <directory>     Override %LOCALAPPDATA%\\Programs\\BurnBar
+  --install-dir <directory>     Override the install location
   --no-start                    Install without launching BurnBar
   --dry-run                     Check release metadata without modifying the installation
   --help                        Show this help
   --version                     Show the installer package version
 
-Install and update use the same verified replacement process. Switching channels
+Install and update use the same checksum-verified process. Switching channels
 replaces the executable but preserves your settings and history.
-Requires Windows x64 (or x64 emulation), Node.js 22+, and Windows PowerShell 5.1.
+Windows: x64 (or emulation) and Windows PowerShell 5.1 -> burnbar.exe in %LOCALAPPDATA%\\Programs\\BurnBar.
+Linux x64: AppImage in ~/.local/share/BurnBar with a launcher entry and ~/.local/bin/burnbar.
+macOS (Apple silicon or Intel): BurnBar.app in ~/Applications.
+Requires Node.js 22+.
 `;
 
 function parseArgs(args) {
@@ -66,12 +69,14 @@ function invocation(options, env = process.env) {
   return { executable, args };
 }
 
-function main(args = process.argv.slice(2), runtime = { platform: process.platform, env: process.env, spawnSync }) {
+async function main(args = process.argv.slice(2), runtime = { platform: process.platform, env: process.env, spawnSync }) {
   try {
     const options = parseArgs(args);
     if (options.help) { console.log(help); return 0; }
     if (options.version) { console.log(pkg.version); return 0; }
-    if (runtime.platform !== 'win32') throw new Error('BurnBar requires Windows. No files were installed.');
+    if (runtime.platform !== 'win32') {
+      return await require('../unix/install.cjs').run(options, { platform: runtime.platform });
+    }
     const { executable, args: psArgs } = invocation(options, runtime.env);
     // PowerShell 7 can pass its incompatible module search path to Windows
     // PowerShell 5.1 (e.g. when npx is launched from pwsh). Let 5.1 construct
@@ -91,5 +96,5 @@ function main(args = process.argv.slice(2), runtime = { platform: process.platfo
   }
 }
 
-if (require.main === module) process.exitCode = main();
+if (require.main === module) main().then((code) => { process.exitCode = code; });
 module.exports = { parseArgs, invocation, main };

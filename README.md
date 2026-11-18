@@ -55,29 +55,33 @@ proxy your traffic or send usage anywhere.
 
 ## Install
 
-### Windows (npx)
+### npx (Windows, macOS, Linux)
 
-You need Windows 10 or 11, Node.js 22+ and a signed-in provider.
+You need Node.js 22+ and a signed-in provider.
 
-```powershell
+```bash
 npx --yes burnbar@latest install
 ```
 
-The installer downloads the checksum-verified `burnbar.exe` from GitHub Releases
-and installs it to `%LOCALAPPDATA%\Programs\BurnBar`. Use
-`npx --yes burnbar@latest update` to update. Development builds use
-`--channel development`. Neither command enables an automatic updater.
+The installer downloads the checksum-verified build for your platform from
+GitHub Releases. Use `npx --yes burnbar@latest update` to update. Development
+builds use `--channel development`. Neither command enables an automatic updater.
+
+| Platform | What gets installed | Where |
+| --- | --- | --- |
+| Windows 10/11 x64 | `burnbar.exe` | `%LOCALAPPDATA%\Programs\BurnBar` |
+| Linux x64 | `.AppImage` (needs FUSE / `libfuse2` on some distros) plus a launcher entry | `~/.local/share/BurnBar`, `~/.local/bin/burnbar` |
+| macOS (Apple silicon and Intel) | `BurnBar.app` | `~/Applications` |
+
+Linux releases also ship a `.deb` you can install directly:
+`sudo apt install ./burnbar-linux-x64.deb`.
 
 > [!WARNING]
 > BurnBar is distributed **unsigned**, so Windows Smart App Control or
-> SmartScreen may warn about it. Verify the SHA-256 published with the release if
-> you need to.
-
-### macOS and Linux
-
-There is no signed installer yet. Build the app from source below, or use the
-CI artifacts attached to a run of the `rust` workflow. The app uses the same
-profile files on every platform.
+> SmartScreen, and macOS Gatekeeper (right-click the app and choose Open), may
+> warn about it. Verify the SHA-256 published next to each release asset if you
+> need to. You can also build from source below. The app uses the same profile
+> files on every platform.
 
 ## Providers
 
@@ -125,7 +129,7 @@ without saving the choice.
 rust/
 ├── crates/burnbar-core/   portable providers, config, history, alerts, forecasts
 └── apps/desktop/          Tauri tray shell + one HTML/CSS/JS interface
-npm/                       npx installer for Windows releases
+npm/                       npx installer for Windows, macOS and Linux releases
 docs/                      screenshots and release notes
 .github/workflows/         Rust CI, Windows release, npm and winget publishing
 ```

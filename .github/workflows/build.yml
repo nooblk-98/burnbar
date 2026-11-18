@@ -1,5 +1,5 @@
 # Builds the Rust/Tauri app, tests the npm installer, and publishes the Windows
-# executable plus its SHA-256 checksum. Version tags publish unsigned binaries;
+# executable, Linux .AppImage/.deb and macOS .app bundles with SHA-256 checksums. Version tags publish unsigned binaries;
 # development pushes publish immutable prereleases.
 name: build
 
@@ -196,6 +196,104 @@ jobs:
           node npm/bin/burnbar.cjs install --channel development --no-start --install-dir (Join-Path $env:RUNNER_TEMP 'BurnBar development smoke install')
           if ($LASTEXITCODE -ne 0) { throw "Development install smoke check failed" }
 
+  bundles:
+    name: Bundle (${{ matrix.name }})
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux x64
+            os: ubuntu-22.04
+            target: ""
+          - name: macOS arm64
+            os: macos-latest
+            target: aarch64-apple-darwin
+          - name: macOS x64
+            os: macos-latest
+            target: x86_64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Tauri system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev \
+            librsvg2-dev patchelf libfuse2
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+          key: bundle-${{ matrix.target }}
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Stamp the app version
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          sed -i.bak -E "s/\"version\": \"[^\"]+\"/\"version\": \"$VERSION\"/" rust/apps/desktop/tauri.conf.json
+          sed -i.bak -E "s/^version = \"[^\"]+\"$/version = \"$VERSION\"/" rust/Cargo.toml
+          rm -f rust/apps/desktop/tauri.conf.json.bak rust/Cargo.toml.bak
+
+      - name: Bundle (Linux)
+        if: runner.os == 'Linux'
+        working-directory: rust/apps/desktop
+        env:
+          NO_STRIP: "true"
+        run: npx --yes @tauri-apps/cli@2 build --bundles deb,appimage
+
+      - name: Bundle (macOS)
+        if: runner.os == 'macOS'
+        working-directory: rust/apps/desktop
+        run: npx --yes @tauri-apps/cli@2 build --bundles app --target ${{ matrix.target }}
+
+      - name: Stage assets and checksums
+        shell: bash
+        run: |
+          mkdir -p dist
+          cd rust/target
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            cp release/bundle/appimage/*.AppImage ../../dist/burnbar-linux-x64.AppImage
+            cp release/bundle/deb/*.deb ../../dist/burnbar-linux-x64.deb
+          else
+            app="${{ matrix.target }}/release/bundle/macos/BurnBar.app"
+            # Unsigned bundles need at least an ad-hoc signature to launch on Apple silicon.
+            codesign --force --deep --sign - "$app"
+            arch="${{ matrix.target }}"; arch="${arch%%-*}"; [ "$arch" = "aarch64" ] && arch=arm64 || arch=x64
+            tar -C "$(dirname "$app")" -czf "../../dist/burnbar-macos-$arch.tar.gz" BurnBar.app
+          fi
+          cd ../../dist
+          for f in *; do
+            if command -v sha256sum >/dev/null; then sum=$(sha256sum "$f" | cut -d' ' -f1); else sum=$(shasum -a 256 "$f" | cut -d' ' -f1); fi
+            echo "$sum  $f" > "$f.sha256"
+          done
+          ls -l
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundle-${{ matrix.os }}-${{ matrix.target || 'native' }}
+          path: dist/*
+          retention-days: 7
+
+      - name: Attach assets to the GitHub release
+        if: github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/development')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then tag="$GITHUB_REF_NAME"; else tag="dev-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"; fi
+          gh release upload "$tag" dist/* --repo "$GITHUB_REPOSITORY" --clobber
+
   npm:
     # Enable after configuring NPM_TOKEN or an npm trusted publisher.
     # Dev commits use the development dist-tag; stable version tags use latest.
@@ -203,7 +301,7 @@ jobs:
       vars.NPM_PUBLISH_ENABLED == 'true' && github.event_name == 'push' &&
       (github.ref == 'refs/heads/development' ||
        (startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-')))
-    needs: build
+    needs: [build, bundles]
     runs-on: ubuntu-latest
     permissions:
       contents: read

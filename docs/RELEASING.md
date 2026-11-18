@@ -18,6 +18,11 @@ desktop binary, and publishes `burnbar.exe` + `burnbar.exe.sha256` to a GitHub
 release. Stable tags must point at `main`; tags containing a suffix such as
 `-beta.1` publish a prerelease.
 
+The same run also builds `burnbar-linux-x64.AppImage`, `burnbar-linux-x64.deb`,
+`burnbar-macos-arm64.tar.gz` and `burnbar-macos-x64.tar.gz` (a zipped,
+ad-hoc-signed `BurnBar.app`) in the `bundles` job and attaches them, each with a
+`.sha256` file, to the same release.
+
 Windows may warn about or block an unsigned executable. The checksum in the
 release notes can be verified with `Get-FileHash burnbar.exe -Algorithm SHA256`.
 
@@ -37,10 +42,10 @@ the newest matching prerelease; the stable latest release is never replaced.
 ## npm installer
 
 The root `package.json` defines the dependency-free `burnbar` installer. It
-bundles only `npm/bin/burnbar.cjs` and `npm/windows/install.ps1`; binaries are
-downloaded from GitHub at install time. There is no lifecycle hook.
+bundles `npm/bin/burnbar.cjs`, `npm/windows/install.ps1` and `npm/unix/` (the
+Node installer for macOS and Linux); binaries are downloaded from GitHub at install time. There is no lifecycle hook.
 
-After the Windows build and installer smoke check pass, the `npm` job publishes:
+After the Windows build, the bundles and the installer smoke check pass, the `npm` job publishes:
 
 | Source | Package version | npm dist-tag | Binary channel |
 | --- | --- | --- | --- |
