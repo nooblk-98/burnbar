@@ -1,6 +1,6 @@
-# Builds and tests the cross-platform Rust/Tauri implementation in `rust/`.
-# Windows runners prove the Windows build, macOS runners prove the macOS build,
-# and Linux runs the unit, integration and headless smoke tests.
+# Tests the Rust/Tauri implementation and builds it on macOS and Linux.
+# Windows is built by the `build` workflow so a pull request does not compile
+# the same target twice; that workflow also owns releases.
 name: rust
 
 on:
@@ -71,10 +71,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: Windows
-            os: windows-latest
-            artifact: burnbar-windows
-            binary: rust/target/release/burnbar.exe
           - name: macOS
             os: macos-latest
             artifact: burnbar-macos

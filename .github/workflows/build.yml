@@ -8,10 +8,22 @@ on:
     branches: [main, development]
     tags: ["v*"]
   pull_request:
+    paths:
+      - "rust/**"
+      - "npm/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/build.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  # Never cancel a tag run while it is publishing a release; cancel superseded
+  # PR and branch runs instead.
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
   build:
