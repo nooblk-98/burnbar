@@ -14,8 +14,6 @@ See how fast you are using your plans without leaving what you are doing.
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-2f6f4e)](#install)
 [![License](https://img.shields.io/github/license/nooblk-98/burnbar)](LICENSE)
 
-<img src="docs/images/burnbar-banner-rounded.png" alt="BurnBar Claude and Codex usage popup on the desktop" width="848">
-
 <img src="docs/images/burnbar-popup-preview.png" alt="BurnBar popup showing Claude, Codex and OpenCode usage with logos" width="560">
 
 </div>
