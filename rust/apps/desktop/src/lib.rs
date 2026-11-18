@@ -6,14 +6,15 @@
 
 use burnbar_core::alerts::reset_text;
 use burnbar_core::config::Config;
-use burnbar_core::service::{RefreshReport, Service, Settings};
+use burnbar_core::service::{RefreshReport, Service};
 use burnbar_core::{updates, UiState};
 use chrono::Utc;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::sync::Mutex;
 use std::time::Duration;
-use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
+use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, LogicalSize, Manager, PhysicalPosition, Rect, State, WindowEvent};
 use tauri_plugin_autostart::ManagerExt as AutostartExt;
@@ -30,7 +31,7 @@ pub struct AppState {
     dialog_open: AtomicBool,
     tail_top: AtomicBool,
     tray_anchor: Mutex<Option<Rect>>,
-    milestones_item: Mutex<Option<CheckMenuItem<tauri::Wry>>>,
+    tray_checks: Mutex<HashMap<String, CheckMenuItem<tauri::Wry>>>,
     scheduler_wake: Mutex<Option<mpsc::SyncSender<()>>>,
 }
 
@@ -116,18 +117,11 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_state,
             refresh_now,
-            save_settings,
-            set_provider_mode,
-            toggle_milestones,
-            snooze,
-            clear_snooze,
             hide_window,
             restore_compact_popup,
+            resize_compact_popup,
             get_popup_tail_top,
-            quit_app,
-            check_updates,
             open_external,
-            send_test_notification,
         ])
         .run(tauri::generate_context!())
         .expect("error while running BurnBar");
@@ -153,7 +147,6 @@ fn setup(
             eprintln!("ignoring --providers {mode}; use claude, codex or both");
         }
     }
-    let milestones = service.config.milestone_popups;
     let start_with_windows = service.config.start_with_windows.unwrap_or(true);
     let hotkey = service.config.hotkey;
     let check_updates = service.config.check_updates;
@@ -165,11 +158,11 @@ fn setup(
         dialog_open: AtomicBool::new(false),
         tail_top: AtomicBool::new(false),
         tray_anchor: Mutex::new(None),
-        milestones_item: Mutex::new(None),
+        tray_checks: Mutex::new(HashMap::new()),
         scheduler_wake: Mutex::new(None),
     });
 
-    build_tray(app, milestones)?;
+    build_tray(app)?;
     if !demo {
         apply_autostart(app.handle(), start_with_windows);
     }
@@ -193,29 +186,433 @@ fn setup(
     Ok(())
 }
 
-fn build_tray(app: &mut tauri::App, milestones: bool) -> Result<(), Box<dyn std::error::Error>> {
+fn tray_check(
+    app: &tauri::App,
+    checks: &mut HashMap<String, CheckMenuItem<tauri::Wry>>,
+    id: &str,
+    label: &str,
+    checked: bool,
+) -> Result<CheckMenuItem<tauri::Wry>, tauri::Error> {
+    let item = CheckMenuItem::with_id(app, id, label, true, checked, None::<&str>)?;
+    checks.insert(id.to_string(), item.clone());
+    Ok(item)
+}
+
+fn build_tray(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    let config = app.state::<AppState>().service()?.config.clone();
+    let mut checks = HashMap::new();
     let show = MenuItem::with_id(app, "show", "Show usage", true, None::<&str>)?;
     let refresh_item = MenuItem::with_id(app, "refresh", "Refresh now", true, None::<&str>)?;
-    let milestones_item = CheckMenuItem::with_id(
+
+    let provider_both = tray_check(
         app,
-        "milestones",
-        "Automatic usage milestones",
+        &mut checks,
+        "provider:both",
+        "Claude + Codex",
+        config.providers == "both",
+    )?;
+    let provider_all = tray_check(
+        app,
+        &mut checks,
+        "provider:all",
+        "All providers",
+        config.providers == "all",
+    )?;
+    let provider_claude = tray_check(
+        app,
+        &mut checks,
+        "provider:claude",
+        "Claude only",
+        config.providers == "claude",
+    )?;
+    let provider_codex = tray_check(
+        app,
+        &mut checks,
+        "provider:codex",
+        "Codex only",
+        config.providers == "codex",
+    )?;
+    let provider_opencode = tray_check(
+        app,
+        &mut checks,
+        "provider:opencode",
+        "OpenCode only",
+        config.providers == "opencode",
+    )?;
+    let provider_cursor = tray_check(
+        app,
+        &mut checks,
+        "provider:cursor",
+        "Cursor only",
+        config.providers == "cursor",
+    )?;
+    let providers = Submenu::with_items(
+        app,
+        "Providers",
         true,
-        milestones,
+        &[
+            &provider_both,
+            &provider_all,
+            &provider_claude,
+            &provider_codex,
+            &provider_opencode,
+            &provider_cursor,
+        ],
+    )?;
+
+    let refresh_1 = tray_check(
+        app,
+        &mut checks,
+        "refresh-rate:1",
+        "Every minute",
+        config.interval_minutes == 1,
+    )?;
+    let refresh_3 = tray_check(
+        app,
+        &mut checks,
+        "refresh-rate:3",
+        "Every 3 minutes",
+        config.interval_minutes == 3,
+    )?;
+    let refresh_5 = tray_check(
+        app,
+        &mut checks,
+        "refresh-rate:5",
+        "Every 5 minutes",
+        config.interval_minutes == 5,
+    )?;
+    let refresh_10 = tray_check(
+        app,
+        &mut checks,
+        "refresh-rate:10",
+        "Every 10 minutes",
+        config.interval_minutes == 10,
+    )?;
+    let refresh_15 = tray_check(
+        app,
+        &mut checks,
+        "refresh-rate:15",
+        "Every 15 minutes",
+        config.interval_minutes == 15,
+    )?;
+    let refresh_30 = tray_check(
+        app,
+        &mut checks,
+        "refresh-rate:30",
+        "Every 30 minutes",
+        config.interval_minutes == 30,
+    )?;
+    let refresh_rate = Submenu::with_items(
+        app,
+        "Refresh interval",
+        true,
+        &[
+            &refresh_1,
+            &refresh_3,
+            &refresh_5,
+            &refresh_10,
+            &refresh_15,
+            &refresh_30,
+        ],
+    )?;
+
+    let delay_3 = tray_check(
+        app,
+        &mut checks,
+        "popup-delay:3",
+        "3 seconds",
+        config.popup_seconds == 3,
+    )?;
+    let delay_5 = tray_check(
+        app,
+        &mut checks,
+        "popup-delay:5",
+        "5 seconds",
+        config.popup_seconds == 5,
+    )?;
+    let delay_6 = tray_check(
+        app,
+        &mut checks,
+        "popup-delay:6",
+        "6 seconds",
+        config.popup_seconds == 6,
+    )?;
+    let delay_10 = tray_check(
+        app,
+        &mut checks,
+        "popup-delay:10",
+        "10 seconds",
+        config.popup_seconds == 10,
+    )?;
+    let delay_15 = tray_check(
+        app,
+        &mut checks,
+        "popup-delay:15",
+        "15 seconds",
+        config.popup_seconds == 15,
+    )?;
+    let delay_30 = tray_check(
+        app,
+        &mut checks,
+        "popup-delay:30",
+        "30 seconds",
+        config.popup_seconds == 30,
+    )?;
+    let delay_60 = tray_check(
+        app,
+        &mut checks,
+        "popup-delay:60",
+        "1 minute",
+        config.popup_seconds == 60,
+    )?;
+    let popup_delay = Submenu::with_items(
+        app,
+        "Popup duration",
+        true,
+        &[
+            &delay_3, &delay_5, &delay_6, &delay_10, &delay_15, &delay_30, &delay_60,
+        ],
+    )?;
+
+    let thresholds = threshold_preset(&config);
+    let threshold_decades = tray_check(
+        app,
+        &mut checks,
+        "thresholds:decades",
+        "Every 10%",
+        thresholds == Some("decades"),
+    )?;
+    let threshold_quarters = tray_check(
+        app,
+        &mut checks,
+        "thresholds:quarters",
+        "Every 25%",
+        thresholds == Some("quarters"),
+    )?;
+    let threshold_critical = tray_check(
+        app,
+        &mut checks,
+        "thresholds:critical",
+        "50%, 80%, 95%",
+        thresholds == Some("critical"),
+    )?;
+    let threshold_off = tray_check(
+        app,
+        &mut checks,
+        "thresholds:off",
+        "Off",
+        thresholds == Some("off"),
+    )?;
+    let threshold_menu = Submenu::with_items(
+        app,
+        "Milestone levels",
+        true,
+        &[
+            &threshold_decades,
+            &threshold_quarters,
+            &threshold_critical,
+            &threshold_off,
+        ],
+    )?;
+
+    let milestones = tray_check(
+        app,
+        &mut checks,
+        "toggle:milestones",
+        "Automatic milestone popups",
+        config.milestone_popups,
+    )?;
+    let alerts = tray_check(
+        app,
+        &mut checks,
+        "toggle:alerts",
+        "80% / 95% and reset alerts",
+        config.alerts,
+    )?;
+    let native = tray_check(
+        app,
+        &mut checks,
+        "toggle:native",
+        "Use native milestone notifications",
+        config.native_notices,
+    )?;
+    let always_show = tray_check(
+        app,
+        &mut checks,
+        "toggle:always-show",
+        "Keep popup open",
+        config.always_show_popup,
+    )?;
+    let notification_menu = Submenu::with_items(
+        app,
+        "Notifications",
+        true,
+        &[
+            &milestones,
+            &alerts,
+            &native,
+            &always_show,
+            &PredefinedMenuItem::separator(app)?,
+            &threshold_menu,
+        ],
+    )?;
+
+    let theme_system = tray_check(
+        app,
+        &mut checks,
+        "theme:system",
+        "Follow system",
+        config.theme == "system",
+    )?;
+    let theme_light = tray_check(
+        app,
+        &mut checks,
+        "theme:light",
+        "Light",
+        config.theme == "light",
+    )?;
+    let theme_dark = tray_check(
+        app,
+        &mut checks,
+        "theme:dark",
+        "Dark",
+        config.theme == "dark",
+    )?;
+    let theme = Submenu::with_items(
+        app,
+        "Theme",
+        true,
+        &[&theme_system, &theme_light, &theme_dark],
+    )?;
+    let text_100 = tray_check(
+        app,
+        &mut checks,
+        "text-size:100",
+        "100%",
+        config.text_scale == 100,
+    )?;
+    let text_125 = tray_check(
+        app,
+        &mut checks,
+        "text-size:125",
+        "125%",
+        config.text_scale == 125,
+    )?;
+    let text_150 = tray_check(
+        app,
+        &mut checks,
+        "text-size:150",
+        "150%",
+        config.text_scale == 150,
+    )?;
+    let text_size =
+        Submenu::with_items(app, "Text size", true, &[&text_100, &text_125, &text_150])?;
+    let appearance = Submenu::with_items(app, "Appearance", true, &[&theme, &text_size])?;
+
+    let quiet_off = tray_check(app, &mut checks, "quiet:off", "Off", !config.quiet_hours)?;
+    let quiet_22 = tray_check(
+        app,
+        &mut checks,
+        "quiet:22-7",
+        "10 PM – 7 AM",
+        config.quiet_hours && config.quiet_start == 1320 && config.quiet_end == 420,
+    )?;
+    let quiet_23 = tray_check(
+        app,
+        &mut checks,
+        "quiet:23-7",
+        "11 PM – 7 AM",
+        config.quiet_hours && config.quiet_start == 1380 && config.quiet_end == 420,
+    )?;
+    let quiet_00 = tray_check(
+        app,
+        &mut checks,
+        "quiet:0-8",
+        "Midnight – 8 AM",
+        config.quiet_hours && config.quiet_start == 0 && config.quiet_end == 480,
+    )?;
+    let quiet = Submenu::with_items(
+        app,
+        "Quiet hours",
+        true,
+        &[&quiet_off, &quiet_22, &quiet_23, &quiet_00],
+    )?;
+
+    let snooze_30 = MenuItem::with_id(app, "snooze:30", "30 minutes", true, None::<&str>)?;
+    let snooze_60 = MenuItem::with_id(app, "snooze:60", "1 hour", true, None::<&str>)?;
+    let snooze_clear = MenuItem::with_id(app, "snooze:clear", "Clear snooze", true, None::<&str>)?;
+    let snooze = Submenu::with_items(
+        app,
+        "Snooze alerts",
+        true,
+        &[&snooze_30, &snooze_60, &snooze_clear],
+    )?;
+
+    let startup = tray_check(
+        app,
+        &mut checks,
+        "toggle:startup",
+        "Start when I sign in",
+        config.start_with_windows.unwrap_or(true),
+    )?;
+    let hotkey = tray_check(
+        app,
+        &mut checks,
+        "toggle:hotkey",
+        "Enable Ctrl+Alt+B",
+        config.hotkey,
+    )?;
+    let update_checks = tray_check(
+        app,
+        &mut checks,
+        "toggle:update-checks",
+        "Check for updates automatically",
+        config.check_updates,
+    )?;
+    let check_updates_now = MenuItem::with_id(
+        app,
+        "check-updates",
+        "Check for updates now",
+        true,
         None::<&str>,
     )?;
-    let settings = MenuItem::with_id(app, "settings", "Settings…", true, None::<&str>)?;
+    let preferences = Submenu::with_items(
+        app,
+        "Startup",
+        true,
+        &[
+            &startup,
+            &hotkey,
+            &update_checks,
+            &PredefinedMenuItem::separator(app)?,
+            &check_updates_now,
+        ],
+    )?;
+
+    let test_notification = MenuItem::with_id(
+        app,
+        "test-notification",
+        "Send test notification",
+        true,
+        None::<&str>,
+    )?;
     let about = MenuItem::with_id(app, "about", "About BurnBar", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit BurnBar", true, None::<&str>)?;
-    let separator = PredefinedMenuItem::separator(app)?;
     let menu = Menu::with_items(
         app,
         &[
             &show,
             &refresh_item,
-            &separator,
-            &milestones_item,
-            &settings,
+            &PredefinedMenuItem::separator(app)?,
+            &providers,
+            &refresh_rate,
+            &popup_delay,
+            &notification_menu,
+            &appearance,
+            &quiet,
+            &snooze,
+            &preferences,
+            &test_notification,
             &about,
             &PredefinedMenuItem::separator(app)?,
             &quit,
@@ -228,24 +625,7 @@ fn build_tray(app: &mut tauri::App, milestones: bool) -> Result<(), Box<dyn std:
         .tooltip("BurnBar — Claude, Codex, OpenCode and Cursor usage")
         .menu(&menu)
         .show_menu_on_left_click(false)
-        .on_menu_event(|app, event| match event.id.as_ref() {
-            "show" => {
-                show_manual_popup(app, None);
-            }
-            "refresh" => {
-                let handle = app.clone();
-                std::thread::spawn(move || refresh(&handle));
-            }
-            "milestones" => toggle_milestones_from_tray(app),
-            "settings" => {
-                show_dialog_window(app, "open-settings", 430.0, 720.0);
-            }
-            "about" => {
-                show_dialog_window(app, "open-about", 380.0, 360.0);
-            }
-            "quit" => app.exit(0),
-            _ => {}
-        })
+        .on_menu_event(|app, event| handle_tray_menu(app, event.id.as_ref()))
         .on_tray_icon_event(|tray, event| {
             if let TrayIconEvent::Click {
                 button: MouseButton::Left,
@@ -259,44 +639,209 @@ fn build_tray(app: &mut tauri::App, milestones: bool) -> Result<(), Box<dyn std:
         })
         .build(app)?;
 
-    let state = app.state::<AppState>();
-    *state
-        .milestones_item
+    *app.state::<AppState>()
+        .tray_checks
         .lock()
-        .map_err(|_| "tray state unavailable")? = Some(milestones_item);
+        .map_err(|_| "tray state unavailable")? = checks;
     Ok(())
 }
 
-fn toggle_milestones_from_tray(app: &AppHandle) {
-    let state = app.state::<AppState>();
-    let enabled = match state.service() {
-        Ok(mut service) => match service.toggle_milestones() {
-            Ok(enabled) => enabled,
-            Err(err) => {
-                eprintln!("could not toggle milestones: {err}");
-                return;
-            }
-        },
-        Err(err) => {
-            eprintln!("{err}");
-            return;
-        }
-    };
-    if let Ok(item) = state.milestones_item.lock() {
-        if let Some(item) = item.as_ref() {
-            let _ = item.set_checked(enabled);
-        }
+fn threshold_preset(config: &Config) -> Option<&'static str> {
+    if config.primary_thresholds != config.secondary_thresholds {
+        return None;
     }
-    emit_state(app);
+    match config.primary_thresholds.as_slice() {
+        [10, 20, 30, 40, 50, 60, 70, 80, 90, 100] => Some("decades"),
+        [25, 50, 75, 100] => Some("quarters"),
+        [50, 80, 95] => Some("critical"),
+        [] => Some("off"),
+        _ => None,
+    }
 }
 
-fn set_milestone_check(app: &AppHandle, enabled: bool) {
+fn tray_item_checked(id: &str, config: &Config) -> bool {
+    match id {
+        id if id.starts_with("provider:") => id[9..] == config.providers,
+        id if id.starts_with("refresh-rate:") => id[13..].parse() == Ok(config.interval_minutes),
+        id if id.starts_with("popup-delay:") => id[12..].parse() == Ok(config.popup_seconds),
+        id if id.starts_with("thresholds:") => threshold_preset(config) == Some(&id[11..]),
+        id if id.starts_with("theme:") => id[6..] == config.theme,
+        id if id.starts_with("text-size:") => id[10..].parse() == Ok(config.text_scale),
+        "quiet:off" => !config.quiet_hours,
+        "quiet:22-7" => config.quiet_hours && config.quiet_start == 1320 && config.quiet_end == 420,
+        "quiet:23-7" => config.quiet_hours && config.quiet_start == 1380 && config.quiet_end == 420,
+        "quiet:0-8" => config.quiet_hours && config.quiet_start == 0 && config.quiet_end == 480,
+        "toggle:milestones" => config.milestone_popups,
+        "toggle:alerts" => config.alerts,
+        "toggle:native" => config.native_notices,
+        "toggle:always-show" => config.always_show_popup,
+        "toggle:startup" => config.start_with_windows.unwrap_or(true),
+        "toggle:hotkey" => config.hotkey,
+        "toggle:update-checks" => config.check_updates,
+        _ => false,
+    }
+}
+
+fn sync_tray_checks(app: &AppHandle) {
     let state = app.state::<AppState>();
-    if let Ok(item) = state.milestones_item.lock() {
-        if let Some(item) = item.as_ref() {
-            let _ = item.set_checked(enabled);
+    let config = match state.service() {
+        Ok(service) => service.config.clone(),
+        Err(_) => return,
+    };
+    if let Ok(items) = state.tray_checks.lock() {
+        for (id, item) in items.iter() {
+            let _ = item.set_checked(tray_item_checked(id, &config));
         }
     };
+}
+
+fn apply_tray_setting(app: &AppHandle, id: &str) -> Result<(), String> {
+    let (snapshot, old_autostart, old_hotkey, providers_changed) = {
+        let state = app.state::<AppState>();
+        let mut service = state.service()?;
+        let old = service.settings();
+        let mut settings = old.clone();
+        match id {
+            id if id.starts_with("provider:") => settings.providers = id[9..].to_string(),
+            id if id.starts_with("refresh-rate:") => {
+                settings.interval_minutes =
+                    id[13..].parse().map_err(|_| "invalid refresh interval")?
+            }
+            id if id.starts_with("popup-delay:") => {
+                settings.popup_seconds = id[12..].parse().map_err(|_| "invalid popup duration")?
+            }
+            "thresholds:decades" => {
+                settings.primary_thresholds = (1..=10).map(|n| n * 10).collect()
+            }
+            "thresholds:quarters" => settings.primary_thresholds = vec![25, 50, 75, 100],
+            "thresholds:critical" => settings.primary_thresholds = vec![50, 80, 95],
+            "thresholds:off" => settings.primary_thresholds.clear(),
+            id if id.starts_with("theme:") => settings.theme = id[6..].to_string(),
+            id if id.starts_with("text-size:") => {
+                settings.text_scale = id[10..].parse().map_err(|_| "invalid text size")?
+            }
+            "quiet:off" => settings.quiet_hours = false,
+            "quiet:22-7" => {
+                settings.quiet_hours = true;
+                settings.quiet_start = 1320;
+                settings.quiet_end = 420;
+            }
+            "quiet:23-7" => {
+                settings.quiet_hours = true;
+                settings.quiet_start = 1380;
+                settings.quiet_end = 420;
+            }
+            "quiet:0-8" => {
+                settings.quiet_hours = true;
+                settings.quiet_start = 0;
+                settings.quiet_end = 480;
+            }
+            "toggle:milestones" => settings.milestone_popups = !old.milestone_popups,
+            "toggle:alerts" => settings.alerts = !old.alerts,
+            "toggle:native" => settings.native_notices = !old.native_notices,
+            "toggle:always-show" => settings.always_show_popup = !old.always_show_popup,
+            "toggle:startup" => settings.start_with_windows = !old.start_with_windows,
+            "toggle:hotkey" => settings.hotkey = !old.hotkey,
+            "toggle:update-checks" => settings.check_updates = !old.check_updates,
+            _ => return Err(format!("unknown tray setting: {id}")),
+        }
+        if id.starts_with("thresholds:") {
+            settings.secondary_thresholds = settings.primary_thresholds.clone();
+        }
+        let providers_changed = settings.providers != old.providers;
+        service.apply_settings(settings)?;
+        (
+            service.snapshot(),
+            old.start_with_windows,
+            old.hotkey,
+            providers_changed,
+        )
+    };
+    if snapshot.settings.start_with_windows != old_autostart {
+        apply_autostart(app, snapshot.settings.start_with_windows);
+    }
+    if snapshot.settings.hotkey != old_hotkey {
+        apply_hotkey(app, snapshot.settings.hotkey);
+    }
+    sync_tray_checks(app);
+    wake_scheduler(app);
+    let _ = app.emit("state-changed", &snapshot);
+    if providers_changed {
+        let handle = app.clone();
+        std::thread::spawn(move || refresh(&handle));
+    }
+    Ok(())
+}
+
+fn notify(app: &AppHandle, title: &str, body: &str) {
+    let _ = app.notification().builder().title(title).body(body).show();
+}
+
+fn check_updates_from_tray(app: AppHandle) {
+    std::thread::spawn(move || match updates::check() {
+        Ok(release) => {
+            let current = burnbar_core::version();
+            if updates::newer(current, &release.version) {
+                notify(
+                    &app,
+                    "BurnBar update available",
+                    &format!("Version {} is available.", release.version),
+                );
+            } else {
+                notify(
+                    &app,
+                    "BurnBar is up to date",
+                    &format!("You are using version {current}."),
+                );
+            }
+        }
+        Err(err) => notify(&app, "Update check failed", &err),
+    });
+}
+
+fn handle_tray_menu(app: &AppHandle, id: &str) {
+    match id {
+        "show" => show_manual_popup(app, None),
+        "refresh" => {
+            let handle = app.clone();
+            std::thread::spawn(move || refresh(&handle));
+        }
+        "about" => show_dialog_window(app, "open-about", 380.0, 360.0),
+        "check-updates" => check_updates_from_tray(app.clone()),
+        "test-notification" => notify(
+            app,
+            "BurnBar test notification",
+            "Notifications are working.",
+        ),
+        "snooze:30" | "snooze:60" => {
+            let minutes = id[7..].parse().unwrap_or(30);
+            if let Ok(mut service) = app.state::<AppState>().service() {
+                let _ = service.snooze(minutes);
+            }
+            notify(
+                app,
+                "BurnBar alerts snoozed",
+                &format!("Alerts are paused for {minutes} minutes."),
+            );
+        }
+        "snooze:clear" => {
+            if let Ok(mut service) = app.state::<AppState>().service() {
+                let _ = service.clear_snooze();
+            }
+            notify(
+                app,
+                "BurnBar snooze cleared",
+                "Usage alerts are active again.",
+            );
+        }
+        "quit" => app.exit(0),
+        _ => {
+            if let Err(err) = apply_tray_setting(app, id) {
+                eprintln!("could not update {id}: {err}");
+                sync_tray_checks(app);
+            }
+        }
+    }
 }
 
 fn apply_autostart(app: &AppHandle, enabled: bool) {
@@ -641,7 +1186,7 @@ fn start_update_check(app: AppHandle) {
             .builder()
             .title("BurnBar update available")
             .body(format!(
-                "Version {} is available. Open Settings to see the release notes.",
+                "Version {} is available. Open the tray menu for options.",
                 release.version
             ))
             .show();
@@ -661,92 +1206,6 @@ fn refresh_now(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn save_settings(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    settings: Settings,
-) -> Result<UiState, String> {
-    let (snapshot, autostart, hotkey, providers_changed, milestones) = {
-        let mut service = state.service()?;
-        let old_providers = service.config.providers.clone();
-        service.apply_settings(settings)?;
-        let autostart = service.config.start_with_windows.unwrap_or(true);
-        let hotkey = service.config.hotkey;
-        let providers_changed = service.config.providers != old_providers;
-        let milestones = service.config.milestone_popups;
-        (
-            service.snapshot(),
-            autostart,
-            hotkey,
-            providers_changed,
-            milestones,
-        )
-    };
-    apply_autostart(&app, autostart);
-    apply_hotkey(&app, hotkey);
-    set_milestone_check(&app, milestones);
-    wake_scheduler(&app);
-    let _ = app.emit("state-changed", &snapshot);
-    if providers_changed {
-        let handle = app.clone();
-        std::thread::spawn(move || refresh(&handle));
-    }
-    Ok(snapshot)
-}
-
-#[tauri::command]
-fn set_provider_mode(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    mode: String,
-) -> Result<UiState, String> {
-    let snapshot = {
-        let mut service = state.service()?;
-        service.set_provider_mode(&mode)?;
-        service.snapshot()
-    };
-    let _ = app.emit("state-changed", &snapshot);
-    wake_scheduler(&app);
-    let handle = app.clone();
-    std::thread::spawn(move || refresh(&handle));
-    Ok(snapshot)
-}
-
-#[tauri::command]
-fn toggle_milestones(app: AppHandle, state: State<'_, AppState>) -> Result<UiState, String> {
-    let snapshot = {
-        let mut service = state.service()?;
-        let enabled = service.toggle_milestones()?;
-        set_milestone_check(&app, enabled);
-        service.snapshot()
-    };
-    let _ = app.emit("state-changed", &snapshot);
-    Ok(snapshot)
-}
-
-#[tauri::command]
-fn snooze(app: AppHandle, state: State<'_, AppState>, minutes: i64) -> Result<UiState, String> {
-    let snapshot = {
-        let mut service = state.service()?;
-        service.snooze(minutes)?;
-        service.snapshot()
-    };
-    let _ = app.emit("state-changed", &snapshot);
-    Ok(snapshot)
-}
-
-#[tauri::command]
-fn clear_snooze(app: AppHandle, state: State<'_, AppState>) -> Result<UiState, String> {
-    let snapshot = {
-        let mut service = state.service()?;
-        service.clear_snooze()?;
-        service.snapshot()
-    };
-    let _ = app.emit("state-changed", &snapshot);
-    Ok(snapshot)
-}
-
-#[tauri::command]
 fn hide_window(app: AppHandle) {
     if let Some(window) = app.get_webview_window(MAIN_WINDOW) {
         let _ = window.hide();
@@ -759,25 +1218,17 @@ fn restore_compact_popup(app: AppHandle) {
 }
 
 #[tauri::command]
+fn resize_compact_popup(app: AppHandle, height: f64) {
+    if app.state::<AppState>().dialog_open.load(Ordering::SeqCst) {
+        return;
+    }
+    let (width, _) = compact_size(&app);
+    position_compact_window(&app, None, width, height.clamp(96.0, 720.0));
+}
+
+#[tauri::command]
 fn get_popup_tail_top(state: State<'_, AppState>) -> bool {
     state.tail_top.load(Ordering::SeqCst)
-}
-
-#[tauri::command]
-fn quit_app(app: AppHandle) {
-    app.exit(0);
-}
-
-#[tauri::command]
-fn check_updates(state: State<'_, AppState>) -> Result<UpdateInfo, String> {
-    let current = state.service()?.snapshot().version;
-    let release = updates::check()?;
-    Ok(UpdateInfo {
-        available: updates::newer(&current, &release.version),
-        current,
-        latest: release.version,
-        url: release.url,
-    })
 }
 
 #[tauri::command]
@@ -788,20 +1239,6 @@ fn open_external(url: String) -> Result<(), String> {
         return Err("that link is not part of BurnBar".into());
     }
     tauri_plugin_opener::open_url(url, None::<&str>).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-fn send_test_notification(app: AppHandle) -> Result<(), String> {
-    let body = format!(
-        "This is what a milestone looks like. {}",
-        reset_text(Some(Utc::now() + chrono::Duration::hours(1)), Utc::now())
-    );
-    app.notification()
-        .builder()
-        .title("BurnBar test notification")
-        .body(body)
-        .show()
-        .map_err(|e| e.to_string())
 }
 
 #[cfg(test)]
@@ -835,7 +1272,7 @@ mod tests {
 
     #[test]
     fn settings_dto_matches_the_web_ui_contract() {
-        let settings = Settings::from(&Config::default());
+        let settings = burnbar_core::service::Settings::from(&Config::default());
         let json = serde_json::to_value(&settings).unwrap();
         for key in [
             "popupSeconds",
@@ -847,8 +1284,36 @@ mod tests {
         ] {
             assert!(json.get(key).is_some(), "missing {key} in {json}");
         }
-        let back: Settings = serde_json::from_value(json).unwrap();
+        let back: burnbar_core::service::Settings = serde_json::from_value(json).unwrap();
         assert_eq!(back, settings);
+    }
+
+    #[test]
+    fn native_tray_marks_exactly_the_saved_choice() {
+        let config = Config {
+            providers: "all".into(),
+            interval_minutes: 5,
+            theme: "dark".into(),
+            ..Config::default()
+        };
+
+        assert!(tray_item_checked("provider:all", &config));
+        assert!(!tray_item_checked("provider:both", &config));
+        assert!(tray_item_checked("refresh-rate:5", &config));
+        assert!(!tray_item_checked("refresh-rate:3", &config));
+        assert!(tray_item_checked("theme:dark", &config));
+        assert!(!tray_item_checked("theme:system", &config));
+    }
+
+    #[test]
+    fn milestone_presets_are_detected_only_when_both_windows_match() {
+        let mut config = Config::default();
+        assert_eq!(threshold_preset(&config), Some("decades"));
+        config.primary_thresholds = vec![50, 80, 95];
+        config.secondary_thresholds = config.primary_thresholds.clone();
+        assert_eq!(threshold_preset(&config), Some("critical"));
+        config.secondary_thresholds = vec![25, 50, 75, 100];
+        assert_eq!(threshold_preset(&config), None);
     }
 
     #[test]

@@ -24,8 +24,8 @@ struct Cooldown {
     backoff_secs: i64,
 }
 
-/// Settings the UI is allowed to edit. Internal state (`milestoneState`,
-/// `alertState`) is never replaced by a settings save.
+/// Settings the tray configuration surface is allowed to edit. Internal state
+/// (`milestoneState`, `alertState`) is never replaced by a settings save.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Settings {
@@ -390,7 +390,7 @@ impl Service {
         (notices, changed)
     }
 
-    /// Apply validated edits from the Settings UI.
+    /// Apply validated edits from the native tray menu.
     pub fn apply_settings(&mut self, settings: Settings) -> Result<(), String> {
         let mut next = self.config.clone();
         settings.apply_to(&mut next);

@@ -53,7 +53,7 @@ html,
 body {
   margin: 0;
   width: 100%;
-  height: 100%;
+  height: auto;
   overflow: hidden;
   background: transparent;
   color: var(--text);
@@ -91,8 +91,7 @@ select:focus-visible {
 .compact-popup {
   position: relative;
   display: flex;
-  height: 100%;
-  min-height: 0;
+  height: auto;
   flex-direction: column;
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -140,14 +139,12 @@ body[data-tail="top"] .compact-popup::after {
 }
 
 .compact-providers {
-  min-height: 0;
-  flex: 1 1 auto;
-  overflow: hidden;
-  padding: 12px 14px 3px;
+  flex: 0 0 auto;
+  padding: 10px 14px 2px;
 }
 
 .compact-provider + .compact-provider {
-  margin-top: 15px;
+  margin-top: 12px;
 }
 
 .compact-provider-head {
@@ -155,7 +152,7 @@ body[data-tail="top"] .compact-popup::after {
   min-height: 19px;
   align-items: baseline;
   justify-content: space-between;
-  margin-bottom: 5px;
+  margin-bottom: 3px;
 }
 
 .compact-provider-head strong {
@@ -169,7 +166,7 @@ body[data-tail="top"] .compact-popup::after {
 }
 
 .compact-meter {
-  min-height: 31px;
+  min-height: 29px;
 }
 
 .compact-meter-line {
@@ -246,9 +243,8 @@ body[data-tail="top"] .compact-popup::after {
 .compact-footer {
   display: flex;
   flex: 0 0 auto;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 5px 14px 10px;
+  justify-content: center;
+  padding: 4px 14px 9px;
   color: var(--muted);
   font-size: 0.7rem;
   white-space: nowrap;
@@ -277,12 +273,6 @@ body.dialog-mode .compact-popup {
 
 .sheet::backdrop {
   background: var(--panel-soft);
-}
-
-.sheet form {
-  display: flex;
-  max-height: inherit;
-  flex-direction: column;
 }
 
 .sheet-header {
@@ -321,101 +311,20 @@ body.dialog-mode .compact-popup {
   overflow-y: auto;
 }
 
-.sheet-footer {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  border-top: 1px solid var(--border);
-  background: var(--panel-soft);
-}
-
-.spacer {
-  flex: 1;
-}
-
-.settings-group {
-  display: grid;
-  gap: 8px;
-  margin-bottom: 10px;
-  padding: 2px 0 10px;
-  border-bottom: 1px solid var(--border);
-}
-
-.settings-group:last-of-type {
-  margin-bottom: 0;
-  border-bottom: 0;
-}
-
-.settings-group h3 {
-  margin: 2px 0 0;
-  color: var(--muted);
-  font-size: 0.78rem;
-  font-weight: 650;
-}
-
-.field {
-  display: grid;
-  gap: 4px;
-  font-size: 0.8rem;
-}
-
-.field small,
 .muted {
   color: var(--muted);
 }
 
-.field small,
 .small {
   font-size: 0.72rem;
 }
 
-.field-inline,
 .button-row {
   display: flex;
   flex-wrap: wrap;
   gap: 7px;
 }
 
-input[type="text"],
-input[type="number"],
-input[type="time"],
-select {
-  width: 100%;
-  padding: 6px 8px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: var(--panel-soft);
-}
-
-input[type="number"] {
-  width: 76px;
-}
-
-.field-inline input[type="time"] {
-  width: 106px;
-}
-
-.inline {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.toggle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 0.8rem;
-}
-
-.toggle input {
-  width: 15px;
-  height: 15px;
-  accent-color: var(--primary);
-}
-
-button.primary,
 button.secondary {
   padding: 6px 11px;
   border: 1px solid var(--border);
@@ -423,27 +332,8 @@ button.secondary {
   font-size: 0.8rem;
 }
 
-button.primary {
-  border-color: #d85d2b;
-  background: var(--primary);
-  color: #fff;
-}
-
 button.secondary {
   background: var(--panel-soft);
-}
-
-.link-button {
-  padding: 1px;
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  text-decoration: underline;
-}
-
-.error {
-  color: var(--warning);
-  font-size: 0.76rem;
 }
 
 .about {

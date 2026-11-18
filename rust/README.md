@@ -22,7 +22,7 @@ rust/
 │   └── tests/e2e.rs            mock HTTP + full refresh cycle
 └── apps/desktop/               the only platform-aware crate
     ├── src/lib.rs              Tauri commands, tray, notifications, autostart
-    ├── ui/                     compact tray popup + settings for every OS
+    ├── ui/                     compact usage popup + About dialog
     └── tauri.conf.json         window, bundle and security policy
 ```
 
