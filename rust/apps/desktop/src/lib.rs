@@ -9,13 +9,13 @@ use burnbar_core::config::Config;
 use burnbar_core::service::{RefreshReport, Service, Settings};
 use burnbar_core::{updates, UiState};
 use chrono::Utc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::sync::Mutex;
 use std::time::Duration;
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
+use tauri::{AppHandle, Emitter, LogicalSize, Manager, PhysicalPosition, Rect, State, WindowEvent};
 use tauri_plugin_autostart::ManagerExt as AutostartExt;
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 use tauri_plugin_notification::NotificationExt;
@@ -27,6 +27,9 @@ pub struct AppState {
     /// Bumped whenever a popup is shown manually; a stale auto-hide timer is
     /// ignored when the token no longer matches.
     popup_token: AtomicU64,
+    dialog_open: AtomicBool,
+    tail_top: AtomicBool,
+    tray_anchor: Mutex<Option<Rect>>,
     milestones_item: Mutex<Option<CheckMenuItem<tauri::Wry>>>,
     scheduler_wake: Mutex<Option<mpsc::SyncSender<()>>>,
 }
@@ -68,7 +71,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            show_window(app);
+            show_manual_popup(app, None);
         }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
@@ -76,7 +79,7 @@ pub fn run() {
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, _shortcut, event| {
                     if event.state() == ShortcutState::Pressed {
-                        show_window(app);
+                        show_manual_popup(app, None);
                     }
                 })
                 .build(),
@@ -91,9 +94,23 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             // Closing the window keeps the tray app alive, matching the Go app.
-            if let WindowEvent::CloseRequested { api, .. } = event {
-                api.prevent_close();
-                let _ = window.hide();
+            match event {
+                WindowEvent::CloseRequested { api, .. } => {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+                WindowEvent::Focused(false) => {
+                    let state = window.state::<AppState>();
+                    let keep_open = state.dialog_open.load(Ordering::SeqCst)
+                        || state
+                            .service()
+                            .map(|service| service.config.always_show_popup)
+                            .unwrap_or(false);
+                    if !keep_open {
+                        let _ = window.hide();
+                    }
+                }
+                _ => {}
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -105,6 +122,8 @@ pub fn run() {
             snooze,
             clear_snooze,
             hide_window,
+            restore_compact_popup,
+            get_popup_tail_top,
             quit_app,
             check_updates,
             open_external,
@@ -143,6 +162,9 @@ fn setup(
     app.manage(AppState {
         service: Mutex::new(service),
         popup_token: AtomicU64::new(0),
+        dialog_open: AtomicBool::new(false),
+        tail_top: AtomicBool::new(false),
+        tray_anchor: Mutex::new(None),
         milestones_item: Mutex::new(None),
         scheduler_wake: Mutex::new(None),
     });
@@ -166,7 +188,7 @@ fn setup(
     }
 
     if !hidden || first_run {
-        show_window(app.handle());
+        show_manual_popup(app.handle(), None);
     }
     Ok(())
 }
@@ -208,7 +230,7 @@ fn build_tray(app: &mut tauri::App, milestones: bool) -> Result<(), Box<dyn std:
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {
             "show" => {
-                show_window(app);
+                show_manual_popup(app, None);
             }
             "refresh" => {
                 let handle = app.clone();
@@ -216,12 +238,10 @@ fn build_tray(app: &mut tauri::App, milestones: bool) -> Result<(), Box<dyn std:
             }
             "milestones" => toggle_milestones_from_tray(app),
             "settings" => {
-                show_window(app);
-                let _ = app.emit("open-settings", ());
+                show_dialog_window(app, "open-settings", 430.0, 720.0);
             }
             "about" => {
-                show_window(app);
-                let _ = app.emit("open-about", ());
+                show_dialog_window(app, "open-about", 380.0, 360.0);
             }
             "quit" => app.exit(0),
             _ => {}
@@ -230,10 +250,11 @@ fn build_tray(app: &mut tauri::App, milestones: bool) -> Result<(), Box<dyn std:
             if let TrayIconEvent::Click {
                 button: MouseButton::Left,
                 button_state: MouseButtonState::Up,
+                rect,
                 ..
             } = event
             {
-                show_window(tray.app_handle());
+                show_manual_popup(tray.app_handle(), Some(rect));
             }
         })
         .build(app)?;
@@ -305,9 +326,128 @@ fn apply_hotkey(app: &AppHandle, enabled: bool) {
     }
 }
 
-fn show_window(app: &AppHandle) -> u64 {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct PopupPlacement {
+    x: i32,
+    y: i32,
+    tail_top: bool,
+}
+
+fn place_popup(
+    work: (i32, i32, u32, u32),
+    anchor: (f64, f64, u32, u32),
+    popup: (u32, u32),
+    gap: i32,
+) -> PopupPlacement {
+    let (work_x, work_y, work_width, work_height) = work;
+    let (popup_width, popup_height) = popup;
+    let (anchor_x, anchor_y, anchor_width, anchor_height) = anchor;
+    let anchor_center_x = anchor_x.round() as i32 + anchor_width as i32 / 2;
+    let anchor_top = anchor_y.round() as i32;
+    let anchor_bottom = anchor_top + anchor_height as i32;
+    let max_x = work_x + work_width as i32 - popup_width as i32;
+    let max_y = work_y + work_height as i32 - popup_height as i32;
+    let x = (anchor_center_x - popup_width as i32 / 2).clamp(work_x, max_x.max(work_x));
+    let tail_top = anchor_top <= work_y + work_height as i32 / 2;
+    let preferred_y = if tail_top {
+        anchor_bottom + gap
+    } else {
+        anchor_top - popup_height as i32 - gap
+    };
+    PopupPlacement {
+        x,
+        y: preferred_y.clamp(work_y, max_y.max(work_y)),
+        tail_top,
+    }
+}
+
+fn compact_size(app: &AppHandle) -> (f64, f64) {
+    let (providers, scale) = app
+        .state::<AppState>()
+        .service()
+        .map(|service| {
+            (
+                burnbar_core::usage::providers_for_mode(&service.config.providers).len(),
+                (service.config.text_scale as f64 / 100.0).clamp(1.0, 1.5),
+            )
+        })
+        .unwrap_or((2, 1.0));
+    let providers = providers.clamp(1, 4);
+    (340.0 * scale, (58.0 + providers as f64 * 106.0) * scale)
+}
+
+fn position_compact_window(app: &AppHandle, anchor: Option<Rect>, width: f64, height: f64) {
+    let Some(window) = app.get_webview_window(MAIN_WINDOW) else {
+        return;
+    };
     let state = app.state::<AppState>();
+    if let Some(anchor) = anchor {
+        if let Ok(mut stored) = state.tray_anchor.lock() {
+            *stored = Some(anchor);
+        }
+    }
+    let anchor = anchor.or_else(|| state.tray_anchor.lock().ok().and_then(|stored| *stored));
+    let _ = window.set_size(LogicalSize::new(width, height));
+
+    let monitors = window.available_monitors().unwrap_or_default();
+    let physical_anchor = anchor.map(|anchor| {
+        let position = anchor.position.to_physical::<f64>(1.0);
+        let size = anchor.size.to_physical::<u32>(1.0);
+        (position.x, position.y, size.width, size.height)
+    });
+    let monitor = physical_anchor
+        .and_then(|(x, y, width, height)| {
+            let center_x = x + width as f64 / 2.0;
+            let center_y = y + height as f64 / 2.0;
+            monitors.iter().find(|monitor| {
+                let position = monitor.position();
+                let size = monitor.size();
+                center_x >= position.x as f64
+                    && center_x < (position.x + size.width as i32) as f64
+                    && center_y >= position.y as f64
+                    && center_y < (position.y + size.height as i32) as f64
+            })
+        })
+        .or_else(|| monitors.first());
+    let Some(monitor) = monitor else {
+        let _ = window.center();
+        return;
+    };
+    let scale = monitor.scale_factor();
+    let popup = (
+        (width * scale).round() as u32,
+        (height * scale).round() as u32,
+    );
+    let work = monitor.work_area();
+    let fallback = (
+        (work.position.x + work.size.width as i32 - 24) as f64,
+        (work.position.y + work.size.height as i32) as f64,
+        24,
+        0,
+    );
+    let placement = place_popup(
+        (
+            work.position.x,
+            work.position.y,
+            work.size.width,
+            work.size.height,
+        ),
+        physical_anchor.unwrap_or(fallback),
+        popup,
+        (8.0 * scale).round() as i32,
+    );
+    state.tail_top.store(placement.tail_top, Ordering::SeqCst);
+    let _ = app.emit("popup-side", placement.tail_top);
+    let _ = window.set_position(PhysicalPosition::new(placement.x, placement.y));
+}
+
+fn show_compact_window(app: &AppHandle, anchor: Option<Rect>) -> u64 {
+    let state = app.state::<AppState>();
+    state.dialog_open.store(false, Ordering::SeqCst);
     let token = state.popup_token.fetch_add(1, Ordering::SeqCst) + 1;
+    let (width, height) = compact_size(app);
+    position_compact_window(app, anchor, width, height);
+    let _ = app.emit("popup-mode", "compact");
     if let Some(window) = app.get_webview_window(MAIN_WINDOW) {
         let _ = window.show();
         let _ = window.unminimize();
@@ -316,8 +456,8 @@ fn show_window(app: &AppHandle) -> u64 {
     token
 }
 
-fn show_popup(app: &AppHandle, seconds: i32) {
-    let token = show_window(app);
+fn show_popup_at(app: &AppHandle, seconds: i32, anchor: Option<Rect>) {
+    let token = show_compact_window(app, anchor);
     let handle = app.clone();
     let seconds = seconds.clamp(1, 300) as u64;
     std::thread::spawn(move || {
@@ -336,6 +476,34 @@ fn show_popup(app: &AppHandle, seconds: i32) {
             }
         }
     });
+}
+
+fn show_popup(app: &AppHandle, seconds: i32) {
+    show_popup_at(app, seconds, None);
+}
+
+fn show_manual_popup(app: &AppHandle, anchor: Option<Rect>) {
+    let seconds = app
+        .state::<AppState>()
+        .service()
+        .map(|service| service.config.popup_seconds)
+        .unwrap_or(6);
+    show_popup_at(app, seconds, anchor);
+}
+
+fn show_dialog_window(app: &AppHandle, event: &str, width: f64, height: f64) {
+    let state = app.state::<AppState>();
+    state.dialog_open.store(true, Ordering::SeqCst);
+    state.popup_token.fetch_add(1, Ordering::SeqCst);
+    if let Some(window) = app.get_webview_window(MAIN_WINDOW) {
+        let _ = window.set_size(LogicalSize::new(width, height));
+        let _ = window.center();
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
+    let _ = app.emit("popup-mode", "dialog");
+    let _ = app.emit(event, ());
 }
 
 fn emit_state(app: &AppHandle) {
@@ -586,6 +754,16 @@ fn hide_window(app: AppHandle) {
 }
 
 #[tauri::command]
+fn restore_compact_popup(app: AppHandle) {
+    show_manual_popup(&app, None);
+}
+
+#[tauri::command]
+fn get_popup_tail_top(state: State<'_, AppState>) -> bool {
+    state.tail_top.load(Ordering::SeqCst)
+}
+
+#[tauri::command]
 fn quit_app(app: AppHandle) {
     app.exit(0);
 }
@@ -685,5 +863,30 @@ mod tests {
         assert!(provider.get("primaryForecast").is_some());
         assert!(provider["usage"].get("fiveHour").is_some());
         assert!(provider["usage"].get("updatedAt").is_some());
+    }
+
+    #[test]
+    fn popup_is_placed_above_a_bottom_tray_and_clamped_to_work_area() {
+        let placement = place_popup((0, 0, 1920, 1040), (1900.0, 1040.0, 20, 40), (340, 270), 8);
+        assert_eq!(
+            placement,
+            PopupPlacement {
+                x: 1580,
+                y: 762,
+                tail_top: false,
+            }
+        );
+    }
+
+    #[test]
+    fn popup_is_placed_below_a_top_tray() {
+        let placement = place_popup(
+            (-1920, 0, 1920, 1040),
+            (-1000.0, 0.0, 24, 32),
+            (340, 270),
+            8,
+        );
+        assert_eq!(placement.y, 40);
+        assert!(placement.tail_top);
     }
 }

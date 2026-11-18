@@ -32,16 +32,16 @@ proxy your traffic or send usage anywhere.
 - **Four providers.** Claude, Codex, OpenCode Go and Cursor, with their reported
   session, weekly or monthly windows and reset times. Choose any combination in
   Settings.
-- **Tray-first window.** Click the tray icon to inspect usage; close the window
-  and BurnBar keeps running. One tray menu, one window and one codebase on
-  Windows, macOS and Linux.
+- **Compact tray popup.** Click the tray icon for the original small usage card,
+  anchored beside the tray and closed automatically after the saved delay.
+  Right-click the tray icon for Settings, About and refresh controls.
 - **Milestone cards.** A small card appears when a quota crosses 10%, 20%, … 100%.
   Notice only the highest new milestone, not every skipped threshold, and never
   replay old milestones after a restart.
 - **Notifications.** Independent session/weekly thresholds, 80% and 95% alerts,
   reset alerts, snooze, quiet hours, and native or in-app notice styles.
-- **History and pace.** 24-hour and 7-day charts for every provider, a pace marker
-  on each bar, and optional time-to-limit estimates once there is enough history.
+- **Pace at a glance.** Each quota keeps the familiar progress bar, reset time and
+  pace marker without opening a separate details dashboard.
 - **Clear status.** See how old a reading is, when a provider needs sign-in, and
   when a rate limit will retry. Failed refreshes keep the last good numbers
   without pretending they are fresh.

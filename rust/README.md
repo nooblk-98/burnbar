@@ -4,8 +4,6 @@ The application is one Rust workspace: portable usage logic in
 `crates/burnbar-core`, a Tauri 2 tray shell in `apps/desktop`, and one
 HTML/CSS/JS interface for Windows, macOS and Linux.
 
-<img src="../docs/images/rust-tauri-demo.png" alt="BurnBar tray window with provider usage cards" width="430">
-
 ```
 rust/
 ├── Cargo.toml                  workspace
@@ -16,7 +14,7 @@ rust/
 │   ├── src/opencode.rs         OpenCode Go credential store + usage API
 │   ├── src/cursor.rs           Cursor state store + dashboard usage API
 │   ├── src/config.rs           settings + alert state
-│   ├── src/history.rs          JSONL readings and chart data
+│   ├── src/history.rs          JSONL readings retained for pace calculations
 │   ├── src/alerts.rs           milestones, thresholds, quiet hours
 │   ├── src/insights.rs         health, freshness, pace forecasts
 │   ├── src/updates.rs          public stable-release checks
@@ -24,7 +22,7 @@ rust/
 │   └── tests/e2e.rs            mock HTTP + full refresh cycle
 └── apps/desktop/               the only platform-aware crate
     ├── src/lib.rs              Tauri commands, tray, notifications, autostart
-    ├── ui/                     one interface for every OS
+    ├── ui/                     compact tray popup + settings for every OS
     └── tauri.conf.json         window, bundle and security policy
 ```
 

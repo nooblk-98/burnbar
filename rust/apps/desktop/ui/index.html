@@ -7,39 +7,16 @@
     <title>BurnBar</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
-  <body>
-    <header class="topbar" data-tauri-drag-region>
-      <div class="brand">
-        <img class="logo" src="logo.png" alt="" width="36" height="36" />
-        <div class="brand-text">
-          <h1>BurnBar</h1>
-          <p id="status-line" class="status" role="status">Loading usage…</p>
-        </div>
+  <body data-tail="bottom">
+    <main id="compact-popup" class="compact-popup" aria-label="BurnBar usage">
+      <div id="compact-providers" class="compact-providers" aria-live="polite">
+        <p class="loading">Loading usage…</p>
       </div>
-      <div class="top-actions">
-        <button id="refresh" class="icon-button" title="Refresh now (Ctrl+R)" aria-label="Refresh now">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.34 5.66M20 4v7h-7"/></svg>
-        </button>
-        <button id="settings-button" class="icon-button" title="Settings" aria-label="Settings">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-        </button>
-      </div>
-    </header>
-
-    <main class="content" id="content">
-      <div id="providers" class="providers" aria-live="polite"></div>
-      <section id="empty" class="empty" hidden>
-        <h2>No usage yet</h2>
-        <p id="empty-message">Sign in to Claude Code and/or Codex, then refresh.</p>
-        <p class="muted">BurnBar reads the logins you already have. It never asks for a password.</p>
-      </section>
+      <footer class="compact-footer">
+        <span id="updated-label-compact">Auto closes</span>
+        <span>Right-click tray icon for options</span>
+      </footer>
     </main>
-
-    <footer class="footer">
-      <span id="updated-label" class="muted"></span>
-      <button id="about-button" class="link-button">About</button>
-    </footer>
-
     <dialog id="settings-dialog" class="sheet" aria-labelledby="settings-title">
       <form id="settings-form" method="dialog">
         <header class="sheet-header">
@@ -130,7 +107,6 @@
               </select>
             </label>
             <label class="toggle"><input type="checkbox" name="startWithWindows" /> <span>Start BurnBar when you sign in</span></label>
-            <label class="toggle"><input type="checkbox" name="showForecast" /> <span>Show recent-pace forecasts</span></label>
             <label class="toggle"><input type="checkbox" name="checkUpdates" /> <span>Check for updates</span></label>
             <label class="toggle"><input type="checkbox" name="hotkey" /> <span>Enable the Ctrl+Alt+B shortcut</span></label>
           </section>

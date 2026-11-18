@@ -12,13 +12,16 @@
       {
         "label": "main",
         "title": "BurnBar",
-        "width": 430,
-        "height": 760,
-        "minWidth": 380,
-        "minHeight": 480,
-        "resizable": true,
+        "width": 340,
+        "height": 270,
+        "resizable": false,
         "visible": false,
-        "center": true
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "shadow": false,
+        "center": false
       }
     ],
     "security": {
