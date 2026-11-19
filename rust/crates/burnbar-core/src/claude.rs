@@ -1,7 +1,6 @@
 //! Claude Code usage (Go: `internal/usage/usage.go`).
 //!
-//! BurnBar only *reads* the OAuth token Claude Code already stores. It never
-//! writes credentials, refreshes tokens or opens a login flow.
+//! BurnBar reuses Claude Code's login and renews expired OAuth tokens.
 
 use crate::usage::{Share, Usage, Window};
 use chrono::{DateTime, TimeZone, Utc};
@@ -10,6 +9,8 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 pub const API_URL: &str = "https://api.anthropic.com/api/oauth/usage";
+const TOKEN_URL: &str = "https://platform.claude.com/v1/oauth/token";
+const CLIENT_ID: &str = "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
 const MAX_BODY: u64 = 1 << 20;
 
 #[derive(Debug, Clone)]
@@ -61,11 +62,13 @@ fn credentials_path() -> PathBuf {
     claude_dir().join(".credentials.json")
 }
 
-fn read_token_at(path: &Path, now: DateTime<Utc>) -> Result<String, String> {
+fn read_credentials(path: &Path) -> Result<Value, String> {
     let body = std::fs::read(path)
         .map_err(|_| format!("no Claude Code login found ({})", path.display()))?;
-    let json: Value = serde_json::from_slice(&body)
-        .map_err(|_| "Claude Code credentials file has no OAuth token".to_string())?;
+    serde_json::from_slice(&body).map_err(|_| "Claude Code credentials file is invalid".to_string())
+}
+
+fn token_from_credentials(json: &Value, now: DateTime<Utc>) -> Result<String, String> {
     let oauth = &json["claudeAiOauth"];
     let token = oauth["accessToken"].as_str().unwrap_or("").trim();
     if token.is_empty() {
@@ -82,9 +85,96 @@ fn read_token_at(path: &Path, now: DateTime<Utc>) -> Result<String, String> {
     Ok(token.to_string())
 }
 
+fn read_token_at(path: &Path, now: DateTime<Utc>) -> Result<String, String> {
+    token_from_credentials(&read_credentials(path)?, now)
+}
+
+fn refresh_token_at(path: &Path, token_url: &str, now: DateTime<Utc>) -> Result<String, String> {
+    let mut credentials = read_credentials(path)?;
+    if let Ok(token) = token_from_credentials(&credentials, now) {
+        return Ok(token);
+    }
+    let refresh = credentials["claudeAiOauth"]["refreshToken"]
+        .as_str()
+        .filter(|value| !value.is_empty())
+        .ok_or("Claude Code login expired - run `claude` to sign in again")?
+        .to_string();
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()
+        .map_err(|_| "could not renew Claude Code login".to_string())?;
+    let response = client
+        .post(token_url)
+        .json(&serde_json::json!({
+            "grant_type": "refresh_token",
+            "refresh_token": refresh,
+            "client_id": CLIENT_ID,
+        }))
+        .send()
+        .map_err(|_| "could not renew Claude Code login".to_string())?;
+    if !response.status().is_success() {
+        // Claude may have refreshed the same login while our request was in flight.
+        if let Ok(current) = read_credentials(path) {
+            if current["claudeAiOauth"]["refreshToken"] != refresh {
+                return token_from_credentials(&current, Utc::now());
+            }
+        }
+        return Err(
+            "Claude Code login could not be renewed - run `claude` to sign in again".into(),
+        );
+    }
+    let renewal: Value = response
+        .json()
+        .map_err(|_| "invalid Claude login renewal response")?;
+    let access = renewal["access_token"]
+        .as_str()
+        .filter(|v| !v.is_empty())
+        .ok_or("invalid Claude login renewal response")?;
+    let next_refresh = renewal["refresh_token"]
+        .as_str()
+        .filter(|v| !v.is_empty())
+        .ok_or("invalid Claude login renewal response")?;
+    let expires_in = renewal["expires_in"]
+        .as_i64()
+        .filter(|v| *v > 0)
+        .ok_or("invalid Claude login renewal response")?;
+    // Preserve any newer login written by Claude while the network request ran.
+    let current = read_credentials(path)?;
+    if current["claudeAiOauth"]["refreshToken"] != refresh {
+        return token_from_credentials(&current, Utc::now());
+    }
+    credentials["claudeAiOauth"]["accessToken"] = Value::String(access.into());
+    credentials["claudeAiOauth"]["refreshToken"] = Value::String(next_refresh.into());
+    credentials["claudeAiOauth"]["expiresAt"] =
+        Value::from((Utc::now() + chrono::Duration::seconds(expires_in)).timestamp_millis());
+    let body = serde_json::to_vec(&credentials).map_err(|_| "could not save Claude login")?;
+    let temporary = path.with_extension(format!("burnbar-{}.tmp", std::process::id()));
+    let saved = (|| -> std::io::Result<()> {
+        use std::io::Write;
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary)?;
+        file.write_all(&body)?;
+        file.sync_all()?;
+        std::fs::rename(&temporary, path)
+    })();
+    if saved.is_err() {
+        let _ = std::fs::remove_file(&temporary);
+    }
+    saved.map_err(|_| "could not save Claude login")?;
+    Ok(access.into())
+}
+
 /// Read the OAuth token Claude Code stores after `claude` login.
 pub fn read_token() -> Result<String, String> {
-    read_token_at(&credentials_path(), Utc::now())
+    let path = credentials_path();
+    let now = Utc::now();
+    match read_token_at(&path, now) {
+        Ok(token) => Ok(token),
+        Err(err) if err.contains("expired") => refresh_token_at(&path, TOKEN_URL, now),
+        Err(err) => Err(err),
+    }
 }
 
 fn user_agent() -> String {
@@ -413,5 +503,53 @@ mod tests {
             .unwrap_err()
             .contains("no OAuth token"));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn renews_expired_login_and_preserves_other_credential_fields() {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/token", listener.local_addr().unwrap());
+        let server = std::thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(5)))
+                .unwrap();
+            let mut request = Vec::new();
+            let mut buffer = [0; 4096];
+            loop {
+                let count = stream.read(&mut buffer).unwrap();
+                request.extend_from_slice(&buffer[..count]);
+                if request
+                    .windows(b"old-refresh".len())
+                    .any(|part| part == b"old-refresh")
+                {
+                    break;
+                }
+            }
+            let response =
+                r#"{"access_token":"new-access","refresh_token":"new-refresh","expires_in":28800}"#;
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nContent-Type: application/json\r\n\r\n{}",
+                response.len(),
+                response
+            )
+            .unwrap();
+        });
+        let dir = std::env::temp_dir().join(format!("burnbar-renew-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(".credentials.json");
+        std::fs::write(&path, br#"{"other":"keep","claudeAiOauth":{"accessToken":"old-access","refreshToken":"old-refresh","expiresAt":1}}"#).unwrap();
+        let token = refresh_token_at(&path, &url, Utc::now()).unwrap();
+        server.join().unwrap();
+        let updated = read_credentials(&path).unwrap();
+        assert_eq!(token, "new-access");
+        assert_eq!(updated["other"], "keep");
+        assert_eq!(updated["claudeAiOauth"]["refreshToken"], "new-refresh");
+        assert!(
+            updated["claudeAiOauth"]["expiresAt"].as_i64().unwrap() > Utc::now().timestamp_millis()
+        );
+        let _ = std::fs::remove_dir_all(dir);
     }
 }
