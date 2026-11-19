@@ -7,13 +7,17 @@ const pkg = require('../../package.json');
 
 const help = `BurnBar installer ${pkg.version}
 
-Usage: burnbar [install|update] [options]
+Usage: burnbar [install|update|uninstall] [options]
   --channel stable|development  Release channel (default: matches installer package)
   --install-dir <directory>     Override the install location
   --no-start                    Install without launching BurnBar
   --dry-run                     Check release metadata without modifying the installation
+  --purge                       With uninstall, also delete settings and history
   --help                        Show this help
   --version                     Show the installer package version
+
+Uninstall removes the app, shortcuts and start-on-login entry and keeps your
+settings and history unless --purge is given.
 
 Install and update use the same checksum-verified process. Switching channels
 replaces the executable but preserves your settings and history.
@@ -26,7 +30,10 @@ Requires Node.js 22+.
 function parseArgs(args) {
   const options = { channel: pkg.version.includes('-dev.') ? 'development' : 'stable' };
   const seen = new Set();
-  if (args[0] === 'install' || args[0] === 'update') args = args.slice(1);
+  if (['install', 'update', 'uninstall'].includes(args[0])) {
+    options.command = args[0];
+    args = args.slice(1);
+  }
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (seen.has(arg)) throw new Error(`Duplicate option: ${arg}`);
@@ -46,11 +53,13 @@ function parseArgs(args) {
       }
       case '--no-start': options.noStart = true; break;
       case '--dry-run': options.dryRun = true; break;
+      case '--purge': options.purge = true; break;
       case '--help': options.help = true; break;
       case '--version': options.version = true; break;
       default: throw new Error(`Unknown argument: ${arg}. Use --help for usage.`);
     }
   }
+  if (options.purge && options.command !== 'uninstall') throw new Error('--purge only applies to uninstall');
   return options;
 }
 
@@ -62,8 +71,10 @@ function invocation(options, env = process.env) {
   // script or interpolate user input into a PowerShell command string.
   const executable = path.win32.join(env.SystemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
   const args = ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
-    '-File', path.resolve(__dirname, '../windows/install.ps1'), '-Channel', options.channel];
+    '-File', path.resolve(__dirname, options.command === 'uninstall' ? '../windows/uninstall.ps1' : '../windows/install.ps1')];
+  if (options.command !== 'uninstall') args.push('-Channel', options.channel);
   if (options.installDir) args.push('-InstallDir', options.installDir);
+  if (options.purge) args.push('-Purge');
   if (options.noStart) args.push('-NoStart');
   if (options.dryRun) args.push('-WhatIf');
   return { executable, args };
@@ -74,7 +85,9 @@ async function main(args = process.argv.slice(2), runtime = { platform: process.
     const options = parseArgs(args);
     if (options.help) { console.log(help); return 0; }
     if (options.version) { console.log(pkg.version); return 0; }
+    const uninstalling = options.command === 'uninstall';
     if (runtime.platform !== 'win32') {
+      if (uninstalling) return require('../unix/install.cjs').uninstall(options, { platform: runtime.platform });
       return await require('../unix/install.cjs').run(options, { platform: runtime.platform });
     }
     const { executable, args: psArgs } = invocation(options, runtime.env);

@@ -22,16 +22,17 @@ shortcut, and can stop a running BurnBar to replace it. Settings and history in
 
 ## Provider access
 
-BurnBar only reads the credentials below; it never writes them, refreshes tokens,
-or asks for a password.
+BurnBar uses the existing provider logins and never asks for a password.
 
 ### Claude
 
 Reads the OAuth token Claude Code stores in `~/.claude/.credentials.json`
 (`CLAUDE_CONFIG_DIR` if set) and requests
-`https://api.anthropic.com/api/oauth/usage` over HTTPS. The response supplies
+`https://api.anthropic.com/api/oauth/usage` over HTTPS. When the access token
+expires, BurnBar sends the stored refresh token to Anthropic over HTTPS and
+saves the rotated tokens to that credential file. The usage response supplies
 quota percentages, reset times and the product breakdown. Claude Code handles
-sign-in and token renewal.
+the initial sign-in.
 
 ### Codex
 

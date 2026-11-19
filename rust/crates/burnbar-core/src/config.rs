@@ -83,7 +83,7 @@ fn default_popup_seconds() -> i32 {
     alerts::DEFAULT_POPUP_SECONDS
 }
 fn default_interval() -> i32 {
-    3
+    5
 }
 fn default_true() -> bool {
     true
@@ -116,7 +116,7 @@ impl Default for Config {
             milestone_popups: true,
             milestone_state: Tracker::new(),
             always_show_popup: false,
-            interval_minutes: 3,
+            interval_minutes: default_interval(),
             alerts: true,
             start_with_windows: Some(true),
             primary_thresholds: default_thresholds(),
@@ -229,7 +229,7 @@ impl Config {
             self.providers = "both".into();
         }
         if self.interval_minutes < 1 {
-            self.interval_minutes = 3;
+            self.interval_minutes = default_interval();
         }
     }
 
@@ -292,7 +292,7 @@ mod tests {
         let c = Config::default();
         assert_eq!(c.providers, "both");
         assert_eq!(c.popup_seconds, 6);
-        assert_eq!(c.interval_minutes, 3);
+        assert_eq!(c.interval_minutes, 5);
         assert!(c.milestone_popups);
         assert_eq!(c.start_with_windows, Some(true));
         assert_eq!(

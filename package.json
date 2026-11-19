@@ -17,6 +17,7 @@
   "files": [
     "npm/bin/burnbar.cjs",
     "npm/windows/install.ps1",
+    "npm/windows/uninstall.ps1",
     "npm/unix/install.cjs",
     "npm/unix/burnbar.png"
   ],

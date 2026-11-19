@@ -911,6 +911,27 @@ fn place_popup(
     }
 }
 
+/// Where to anchor the popup when the tray gives no click position (Linux
+/// status-notifier trays only report menu activation). The work area excludes
+/// the panel, so the larger reserved edge shows which side the panel is on:
+/// anchor to the top-right under a top panel, otherwise the bottom-right.
+fn fallback_anchor(
+    monitor: (i32, i32, u32, u32),
+    work: (i32, i32, u32, u32),
+) -> (f64, f64, u32, u32) {
+    let (monitor_x, monitor_y, monitor_width, monitor_height) = monitor;
+    let (work_x, work_y, work_width, work_height) = work;
+    let top_reserved = work_y - monitor_y;
+    let bottom_reserved = (monitor_y + monitor_height as i32) - (work_y + work_height as i32);
+    let right = (work_x + work_width as i32).min(monitor_x + monitor_width as i32) - 24;
+    let edge = if top_reserved > bottom_reserved {
+        work_y
+    } else {
+        work_y + work_height as i32
+    };
+    (right as f64, edge as f64, 24, 0)
+}
+
 fn compact_size(app: &AppHandle) -> (f64, f64) {
     let (providers, scale) = app
         .state::<AppState>()
@@ -969,11 +990,19 @@ fn position_compact_window(app: &AppHandle, anchor: Option<Rect>, width: f64, he
         (height * scale).round() as u32,
     );
     let work = monitor.work_area();
-    let fallback = (
-        (work.position.x + work.size.width as i32 - 24) as f64,
-        (work.position.y + work.size.height as i32) as f64,
-        24,
-        0,
+    let fallback = fallback_anchor(
+        (
+            monitor.position().x,
+            monitor.position().y,
+            monitor.size().width,
+            monitor.size().height,
+        ),
+        (
+            work.position.x,
+            work.position.y,
+            work.size.width,
+            work.size.height,
+        ),
     );
     let placement = place_popup(
         (
@@ -1350,6 +1379,22 @@ mod tests {
         assert!(provider.get("primaryForecast").is_some());
         assert!(provider["usage"].get("fiveHour").is_some());
         assert!(provider["usage"].get("updatedAt").is_some());
+    }
+
+    #[test]
+    fn fallback_anchor_follows_the_panel_edge() {
+        // Bottom taskbar: popup sits above the bottom-right corner.
+        assert_eq!(
+            fallback_anchor((0, 0, 1920, 1080), (0, 0, 1920, 1040)),
+            (1896.0, 1040.0, 24, 0)
+        );
+        // Top panel (common on Linux): popup hangs below the top-right corner.
+        assert_eq!(
+            fallback_anchor((0, 0, 1280, 720), (0, 26, 1280, 694)),
+            (1256.0, 26.0, 24, 0)
+        );
+        let top = fallback_anchor((0, 0, 1280, 720), (0, 26, 1280, 694));
+        assert!(place_popup((0, 26, 1280, 694), top, (290, 309), 8).tail_top);
     }
 
     #[test]

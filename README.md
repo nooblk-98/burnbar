@@ -67,6 +67,10 @@ The installer downloads the checksum-verified build for your platform from
 GitHub Releases. Use `npx --yes burnbar@latest update` to update. Development
 builds use `--channel development`. Neither command enables an automatic updater.
 
+To uninstall, run `npx --yes burnbar@latest uninstall`. It stops BurnBar and removes
+the app, shortcuts and start-on-login entry. Your settings and history are kept
+unless you add `--purge`.
+
 | Platform | What gets installed | Where |
 | --- | --- | --- |
 | Windows 10/11 x64 | `burnbar.exe` | `%LOCALAPPDATA%\Programs\BurnBar` |
@@ -82,6 +86,14 @@ Linux releases also ship a `.deb` you can install directly:
 > warn about it. Verify the SHA-256 published next to each release asset if you
 > need to. You can also build from source below. The app uses the same profile
 > files on every platform.
+
+### Platform testing
+
+| Platform | Status | What was tested |
+| --- | --- | --- |
+| Windows 10/11 | ✅ Passing | Installed with `npx`, tray icon, popup, menu and settings on a real desktop; CI installs and smoke-tests every release |
+| Linux (Ubuntu) | ✅ Passing | Installed the released AppImage with `npx` and ran it end to end on XFCE (X11): tray icon, tray menu, popup placement and rendering. On GNOME Shell (Wayland, with Ubuntu's AppIndicator extension) the app starts and registers its tray icon |
+| macOS (Apple silicon, Intel) | ⏳ Pending | Bundles build in CI, but the app has not been run on a Mac yet |
 
 ## Providers
 

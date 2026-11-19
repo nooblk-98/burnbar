@@ -154,4 +154,43 @@ async function run(options, runtime = {}) {
   return 0;
 }
 
-module.exports = { target, run, findRelease };
+function uninstall(options, runtime = {}) {
+  const { kind } = target(runtime.platform, runtime.arch);
+  const home = runtime.home || os.homedir();
+  const remove = (p, recursive = false) => {
+    if (!fs.existsSync(p) && !isLink(p)) return false;
+    fs.rmSync(p, { recursive, force: true });
+    console.log(`Removed ${p}`);
+    return true;
+  };
+  const isLink = (p) => { try { return fs.lstatSync(p).isSymbolicLink(); } catch { return false; } };
+  let removed = false;
+  let settings;
+  if (kind === 'linux') {
+    const dir = options.installDir || path.join(home, '.local', 'share', 'BurnBar');
+    spawnSync('pkill', ['-f', path.join(dir, 'BurnBar.AppImage')]);
+    // Only the files the installer creates, never the whole directory tree.
+    for (const name of ['BurnBar.AppImage', '.version', 'burnbar.png']) removed = remove(path.join(dir, name)) || removed;
+    try { fs.rmdirSync(dir); } catch { /* not empty or missing */ }
+    const bin = path.join(home, '.local', 'bin', 'burnbar');
+    if (isLink(bin) && fs.readlinkSync(bin) === path.join(dir, 'BurnBar.AppImage')) removed = remove(bin) || removed;
+    removed = remove(path.join(home, '.local', 'share', 'applications', 'burnbar.desktop')) || removed;
+    remove(path.join(home, '.config', 'autostart', 'BurnBar.desktop'));
+    settings = path.join(process.env.XDG_CONFIG_HOME || path.join(home, '.config'), 'BurnBar');
+  } else {
+    const app = path.join(options.installDir || path.join(home, 'Applications'), 'BurnBar.app');
+    spawnSync('pkill', ['-f', `${app}/Contents/MacOS/`]);
+    removed = remove(app, true);
+    remove(path.join(home, 'Library', 'LaunchAgents', 'BurnBar.plist'));
+    settings = path.join(home, 'Library', 'Application Support', 'BurnBar');
+  }
+  if (options.purge) {
+    remove(settings, true);
+  } else if (fs.existsSync(settings)) {
+    console.log(`Settings and history were kept in ${settings}. Use --purge to delete them.`);
+  }
+  console.log(removed ? 'BurnBar has been uninstalled.' : 'BurnBar was not found; nothing to uninstall.');
+  return 0;
+}
+
+module.exports = { target, run, uninstall, findRelease };
